@@ -393,3 +393,16 @@ html[data-note-mode="plain"] .slot{display:none}
   border:1px solid color-mix(in srgb,var(--rose) 32%,transparent);
   border-radius:4px;padding:0 5px;flex:none;cursor:help}
 #tip .tg span{background:var(--surface-soft);color:var(--teal);border:1px solid var(--edge)}
+
+/* 批注操作条放到卡片右侧外面，不再压住文字 */
+.nb .h{right:auto;left:calc(100% + 8px);background:var(--surface);
+  border:1px solid var(--edge);box-shadow:0 6px 18px -10px #0b122080;padding:2px 4px}
+.nb .h button{background:var(--surface)}
+.nb .cdel{right:auto;left:calc(100% + 8px);background:var(--surface);
+  border:1px solid var(--edge);padding:0 5px;line-height:1.5}
+.nb{padding-right:10px}
+.nb.cmt{padding-right:10px}
+/* 右侧对齐模式列窄，操作条留在卡片内并预留空间 */
+html[data-note-mode="side"] .nb .h{left:auto;right:5px}
+html[data-note-mode="side"] .nb{padding-right:74px}
+html[data-note-mode="side"] .nb.cmt{padding-right:36px}

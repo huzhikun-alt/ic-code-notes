@@ -155,13 +155,13 @@ button:focus-visible,select:focus-visible,input:focus-visible,[contenteditable]:
 /* ---------------- note cards ---------------- */
 .nb{position:relative;background:var(--note-bg);color:var(--note-ink);
   border-left:3px solid var(--accent);border-radius:0 8px 8px 0;
-  padding:4px 34px 4px 10px;margin:0}
-.nb .body,.nb .ctext{font-size:12.5px;line-height:22px;color:var(--note-ink);
-  white-space:pre-wrap;overflow-wrap:anywhere;outline:none;min-height:22px}
+  padding:2px 32px 2px 10px;margin:3px 0}
+.nb .body,.nb .ctext{font-size:12.5px;line-height:20px;color:var(--note-ink);
+  white-space:pre-wrap;overflow-wrap:anywhere;outline:none;min-height:20px}
 .nb .body:empty:before{content:attr(data-ph);content:"写下批注…";color:color-mix(in srgb,var(--note-ink) 55%,transparent)}
 .nb:focus-within{box-shadow:none}
-.nb.cmt{background:var(--com-bg);border-left:3px solid #9db3c6;padding:4px 12px;border-radius:0 8px 8px 0}
-.nb.cmt .ctext{color:var(--com-ink);font-size:12.5px;line-height:22px}
+.nb.cmt{background:var(--com-bg);border-left:3px solid #9db3c6;padding:2px 12px;border-radius:0 8px 8px 0}
+.nb.cmt .ctext{color:var(--com-ink);font-size:12.5px;line-height:20px}
 .nb.moved{border-left-color:var(--teal);background:color-mix(in srgb,var(--teal) 8%,var(--paper))}
 .nb.dup{border-left-color:var(--rose);background:color-mix(in srgb,var(--rose) 8%,var(--paper))}
 

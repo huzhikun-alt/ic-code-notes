@@ -8,7 +8,18 @@
 
 部署在 GitHub Pages：**https://huzhikun-alt.github.io/ic-code-notes/**
 
-本地打开：直接双击 `index.html`，或用任意静态服务器。
+本地打开：保持 `index.html`、`ui-refresh.css`、`ui-refresh.js` 在同一目录，再打开 `index.html`，或用任意静态服务器。
+
+## 界面与批注模式
+
+- 默认浅色，可切换深色；主题和批注模式独立保存。
+- **行末批注（默认）**：卡片跟随代码末尾，没有批注的行保持紧凑。
+- **右侧对齐**：保留固定右列和可拖动分隔条，多行批注仍下推后续代码。
+- **纯代码**：暂时隐藏批注，不删除数据。
+- 批注内 `Shift+Enter` 换行，`Enter` 完成编辑。
+- 左侧以工程和文件为主，函数快捷入口默认折叠，完整函数库仍在顶部独立页面。
+
+界面回归测试：安装 Python Playwright 后运行 `python verify-ui.py`（使用本机 Chrome）。
 
 ## 它解决什么
 

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light" data-note-mode="inline">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -373,6 +373,7 @@
     .splitter{left:calc(100% - var(--notew,384px) - 21px)}
   }
 </style>
+<link rel="stylesheet" href="ui-refresh.css">
 </head>
 <body>
 
@@ -386,6 +387,7 @@
   <div class="saved" id="saved"><i></i><span id="savedText">已保存</span></div>
   <button class="iconbtn" id="btnUndo" title="撤销 Ctrl+Z">↶</button>
   <button class="iconbtn" id="btnRedo" title="重做 Ctrl+Shift+Z">↷</button>
+  <button class="iconbtn" id="themeToggle">☾ 深色</button>
   <button class="iconbtn" id="btnHelp">快捷键</button>
   <button class="iconbtn" id="btnReset">重置数据</button>
 </div>
@@ -413,6 +415,7 @@
       </div>
       <div id="cats"></div>
 
+      <details class="nav-functions"><summary>本语言函数快捷入口</summary>
       <div class="fnsect">
         <div class="fnhead">
           <span class="h">函数库 <span class="g">全局</span></span>
@@ -421,6 +424,7 @@
         <div class="searchwrap"><input id="fnSearch" placeholder="搜索函数…"></div>
         <div id="fnList"></div>
       </div>
+      </details>
     </div>
 
     <div class="io">
@@ -436,6 +440,7 @@
         <span class="p" id="fpath"></span>
         <span class="lgb" id="flang"></span>
         <span class="m" id="fmeta"></span>
+        <select id="noteMode" class="mode-picker" aria-label="批注显示模式"><option value="inline">行末批注</option><option value="side">右侧对齐</option><option value="plain">纯代码</option></select>
         <button class="editbtn" id="btnExtract" title="把当前文件里的注释摘到右侧">摘注释</button>
       </div>
       <div class="code" id="code"></div>
@@ -1529,7 +1534,12 @@ function renderCode(){
       ed.addEventListener('blur',()=>{ if(editingLine===i) commitEdit(i,false); });
       requestAnimationFrame(()=>{
         ed.focus();
-        const r=document.createRange(); r.selectNodeContents(ed); r.collapse(false);
+        const r=document.createRange();
+        if(requestedCaret !== null && ed.firstChild){
+          r.setStart(ed.firstChild, Math.min(requestedCaret, ed.firstChild.textContent.length));
+          r.collapse(true);
+        }else{ r.selectNodeContents(ed); r.collapse(false); }
+        requestedCaret = null;
         const s=getSelection(); s.removeAllRanges(); s.addRange(r);
       });
     }
@@ -1677,8 +1687,10 @@ function addNote(no){
 }
 
 /* ---------- 行编辑 ---------- */
-function startEdit(i){
+let requestedCaret = null;
+function startEdit(i, caretOffset){
   if(!hasFile()) return;
+  requestedCaret = Number.isInteger(caretOffset) ? caretOffset : null;
   editingLine=i;
   renderCode();
 }
@@ -1783,8 +1795,16 @@ codeEl.addEventListener('click', e=>{
   if(e.target.closest('.br')) return;
   const sel=window.getSelection();
   if(sel && sel.toString().trim()) return;
+  let offset = null;
+  const src = row.querySelector('.src');
+  const caret = document.caretRangeFromPoint && document.caretRangeFromPoint(e.clientX, e.clientY);
+  if(caret && src && src.contains(caret.startContainer)){
+    const prefix = document.createRange(); prefix.selectNodeContents(src);
+    prefix.setEnd(caret.startContainer, caret.startOffset);
+    offset = prefix.toString().length;
+  }
   clearScope();
-  startEdit(+row.dataset.i);
+  startEdit(+row.dataset.i, offset);
 });
 
 /* ---------- 括号范围 ---------- */
@@ -2254,5 +2274,6 @@ document.addEventListener('keydown',e=>{
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();
 </script>
+<script src="ui-refresh.js"></script>
 </body>
 </html>

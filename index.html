@@ -1571,6 +1571,17 @@ function renderCode(){
 
   renderLost(res.lost);
   document.getElementById('editbar').classList.toggle('on', editingLine>=0);
+
+  /* 如果刚点的是批注卡片，重渲染后把焦点还给它 */
+  if(pendingCardFocus !== null){
+    const ln = pendingCardFocus;
+    pendingCardFocus = null;
+    requestAnimationFrame(()=>{
+      const card = codeEl.querySelector('.nb[data-ln="'+ln+'"]');
+      const target = card && (card.querySelector('.ctext') || card.querySelector('.body'));
+      if(target) target.focus();
+    });
+  }
 }
 
 /* 未定位的笔记：代码删了 / 指纹对不上 */
@@ -1635,6 +1646,7 @@ function buildNoteCard(no, entry){
     const nb=document.createElement('div');
     nb.className='nb cmt'; nb.dataset.ln=no;
     const t=document.createElement('div');
+    /* 从源码摘出来的注释：仍然可以编辑 */
     t.className='ctext'; t.contentEditable='true'; t.textContent=note.text||'';
     t.addEventListener('input',()=>{ note.text=t.innerText; saveAll(); });
     t.addEventListener('blur',()=>{
@@ -1854,13 +1866,24 @@ codeEl.addEventListener('dblclick', e=>{
   startEdit(i);
 });
 
-/* 单击就能编辑（正在拖选文字、或点在括号上时不触发） */
+/* 单击就能编辑；拖选文字、或在括号上时不触发 */
+let downPt=null;
+let pendingCardFocus=null;   // 提交代码编辑后，把焦点交还给刚点的那张卡片
+codeEl.addEventListener('mousedown', e=>{
+  downPt={x:e.clientX,y:e.clientY};
+  const card=e.target.closest('.nb');
+  if(card && !e.target.closest('button')){
+    pendingCardFocus = card.dataset.ln ? +card.dataset.ln : null;
+  }
+}, true);
 codeEl.addEventListener('click', e=>{
   if(editingLine>=0) return;
   const row=e.target.closest('.line');
   if(!row) return;
   if(e.target.closest('.nb')||e.target.closest('.addnote')||e.target.closest('button')) return;
   if(e.target.closest('.br')) return;
+  /* 拖动超过几个像素说明是在选文字，不要进入编辑 */
+  if(downPt && (Math.abs(e.clientX-downPt.x)>4 || Math.abs(e.clientY-downPt.y)>4)) return;
   const sel=window.getSelection();
   if(sel && sel.toString().trim()) return;
   let offset = null;

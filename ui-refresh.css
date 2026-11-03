@@ -132,7 +132,18 @@ button:focus-visible,select:focus-visible,input:focus-visible,[contenteditable]:
 .line .src{font:13px/30px var(--mono);color:var(--ink)}
 .line.an .num{color:var(--accent)}
 .line:hover{background:var(--surface-soft)}
-.line.editing{background:var(--surface-soft);box-shadow:inset 2px 0 var(--teal)}
+::selection{background:color-mix(in srgb,var(--teal) 28%,transparent);color:inherit}
+
+/* no per-line edit box: the caret is the only editing indicator */
+.line.editing{background:transparent;box-shadow:none}
+.line.editing .num{color:var(--teal)}
+.line .src,.line .src *{user-select:text;cursor:text}
+.line .num{cursor:default}
+.nb .body,.nb .ctext,.nb .xcmt{cursor:text}
+.nb .h button,.addnote,.splitter{cursor:pointer}
+/* gutter and controls never end up inside a copied selection */
+.line .num,.addnote,.nb .h,.nb .cdel{user-select:none}
+
 .line .src[contenteditable="true"]{background:transparent;box-shadow:none;padding:0;margin:0;
   outline:none;caret-color:var(--teal)}
 .br{cursor:pointer;border-radius:3px}
@@ -148,7 +159,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,[contenteditable]:
 .nb .body,.nb .ctext{font-size:12.5px;line-height:22px;color:var(--note-ink);
   white-space:pre-wrap;overflow-wrap:anywhere;outline:none;min-height:22px}
 .nb .body:empty:before{content:attr(data-ph);content:"写下批注…";color:color-mix(in srgb,var(--note-ink) 55%,transparent)}
-.nb:focus-within{box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 22%,transparent)}
+.nb:focus-within{box-shadow:none}
 .nb.cmt{background:var(--com-bg);border-left:3px solid #9db3c6;padding:4px 12px;border-radius:0 8px 8px 0}
 .nb.cmt .ctext{color:var(--com-ink);font-size:12.5px;line-height:22px}
 .nb.moved{border-left-color:var(--teal);background:color-mix(in srgb,var(--teal) 8%,var(--paper))}

@@ -373,8 +373,8 @@
     .splitter{left:calc(100% - var(--notew,384px) - 21px)}
   }
 </style>
-<link rel="stylesheet" href="ui-refresh.css?v=20261104c">
-<link rel="stylesheet" href="presets.css?v=20261104c">
+<link rel="stylesheet" href="ui-refresh.css?v=20261104d">
+<link rel="stylesheet" href="presets.css?v=20261104d">
 </head>
 <body>
 
@@ -399,7 +399,7 @@
     <div class="sep"></div>
     <button role="menuitem" id="btnReset" class="dang">重置数据</button>
     <div class="sep"></div>
-    <div class="ver" id="buildVer">构建 20261104-0105</div>
+    <div class="ver" id="buildVer">构建 20261104-0140</div>
   </div>
 </div>
 
@@ -1589,12 +1589,6 @@ function renderCode(){
     const slot=document.createElement('div');
     slot.className='slot';
     if(has) list.forEach(entry=>slot.appendChild(buildNoteCard(no, entry)));
-    else{
-      const add=document.createElement('button');
-      add.className='addnote'; add.textContent='+ 写笔记';
-      add.onclick=()=>addNote(no);
-      slot.appendChild(add);
-    }
 
     row.append(cl,slot);
     row.dataset.i=i;
@@ -1957,20 +1951,47 @@ codeEl.addEventListener('dblclick', e=>{
 let downPt=null;
 let pendingCardFocus=null;   // 提交代码编辑后，把焦点交还给刚点的那张卡片
 let bracketTimer=null;       // 括号单击延迟进入编辑，给双击留出机会
+/* 找离点击位置最近的一行（点在行外的空白处时用） */
+function nearestLine(y){
+  const rows=[...codeEl.querySelectorAll('.line')];
+  if(!rows.length) return null;
+  let best=rows[0], bestD=Infinity;
+  rows.forEach(r=>{
+    const b=r.getBoundingClientRect();
+    const d = y < b.top ? b.top-y : (y > b.bottom ? y-b.bottom : 0);
+    if(d<bestD){ bestD=d; best=r; }
+  });
+  return best;
+}
+
 codeEl.addEventListener('mousedown', e=>{
+  if(e.button!==0) return;
   downPt={x:e.clientX,y:e.clientY};
   const card=e.target.closest('.nb');
-  /* 只有在确实会触发重渲染（正在编辑代码行）时才记下要交还焦点的卡片，
-     否则这个记录会一直挂着，等下次重渲染时把焦点抢走 */
   if(card && !e.target.closest('button') && editingLine>=0){
     pendingCardFocus = card.dataset.ln ? +card.dataset.ln : null;
+    return;
+  }
+  if(card || e.target.closest('button')) return;
+
+  /* 关键：正在编辑这一行时点了另一行/空白，直接在 mousedown 里切换，
+     否则失焦提交会重建 DOM，导致这次点击的 mouseup/click 丢失 */
+  const row=e.target.closest('.line') || nearestLine(e.clientY);
+  if(!row) return;
+  const idx=+row.dataset.i;
+  if(editingLine>=0 && editingLine!==idx){
+    e.preventDefault();
+    commitEdit(editingLine, false, false, null, {line:idx, col:null});
   }
 }, true);
+
 codeEl.addEventListener('click', e=>{
   if(editingLine>=0) return;
-  const row=e.target.closest('.line');
+  if(e.target.closest('.nb')||e.target.closest('button')) return;
+
+  const row=e.target.closest('.line') || nearestLine(e.clientY);
   if(!row) return;
-  if(e.target.closest('.nb')||e.target.closest('.addnote')||e.target.closest('button')) return;
+
   /* 点在括号上：等 240ms，双击出配对范围，单击才进入编辑 */
   if(e.target.closest('.br')){
     clearTimeout(bracketTimer);
@@ -1991,6 +2012,28 @@ codeEl.addEventListener('click', e=>{
   }
   clearScope();
   startEdit(+row.dataset.i, offset);
+});
+
+/* 整个阅读区都在编辑器范围内：点到行外空白，落到最近的一行 */
+const viewCode=document.getElementById('v-code');
+function outsideEditorTarget(t){
+  return t.closest('.line')||t.closest('.nb')||t.closest('button')||
+         t.closest('.chead')||t.closest('#code');
+}
+viewCode.addEventListener('mousedown', e=>{
+  if(e.button!==0 || editingLine<0) return;
+  if(outsideEditorTarget(e.target)) return;
+  const row=nearestLine(e.clientY);
+  if(!row) return;
+  e.preventDefault();
+  commitEdit(editingLine, false, false, null, {line:+row.dataset.i, col:null});
+}, true);
+viewCode.addEventListener('click', e=>{
+  if(editingLine>=0) return;
+  if(outsideEditorTarget(e.target)) return;
+  const row=nearestLine(e.clientY);
+  if(!row) return;
+  startEdit(+row.dataset.i, null);
 });
 
 /* ---------- 括号范围 ---------- */
@@ -2486,6 +2529,6 @@ document.addEventListener('keydown',e=>{
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();
 </script>
-<script src="ui-refresh.js?v=20261104c"></script>
+<script src="ui-refresh.js?v=20261104d"></script>
 </body>
 </html>

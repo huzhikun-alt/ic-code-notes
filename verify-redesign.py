@@ -71,7 +71,7 @@ with sync_playwright() as p:
     page.locator('#btnLost').click(); page.wait_for_timeout(250)
     r['lost_dialog_open'] = page.locator('#mask').is_visible()
     r['lost_rows'] = page.locator('.lostrow').count()
-    page.locator('#dlgCancel').click(); page.wait_for_timeout(150)
+    page.locator('#dlgOk').click(); page.wait_for_timeout(150)
 
     # 8. nav typography
     r['nav_font_px'] = page.locator('.file').first.evaluate('e=>getComputedStyle(e).fontSize')

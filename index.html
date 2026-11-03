@@ -373,8 +373,8 @@
     .splitter{left:calc(100% - var(--notew,384px) - 21px)}
   }
 </style>
-<link rel="stylesheet" href="ui-refresh.css?v=20261104a">
-<link rel="stylesheet" href="presets.css?v=20261104a">
+<link rel="stylesheet" href="ui-refresh.css?v=20261104b">
+<link rel="stylesheet" href="presets.css?v=20261104b">
 </head>
 <body>
 
@@ -1012,13 +1012,16 @@ document.addEventListener('click', e=>{ if(!menuEl.contains(e.target)) hideMenu(
 const mask = document.getElementById('mask');
 let dlgOk = null;
 function openModal({title, sub, body, okText='确定', okClass='', cancelText='取消', onOk}){
+  const cancelBtn = cancelText === false ? '' :
+    '<button class="btn" id="dlgCancel">'+esc(cancelText)+'</button>';
   document.getElementById('dlgBody').innerHTML =
     '<h3>'+esc(title)+'</h3>'+(sub?'<div class="sub">'+sub+'</div>':'')+body+
-    '<div class="act"><button class="btn" id="dlgCancel">'+esc(cancelText)+'</button>'+
+    '<div class="act">'+cancelBtn+
     '<button class="btn '+okClass+'" id="dlgOk">'+esc(okText)+'</button></div>';
   mask.classList.add('on');
   dlgOk = onOk;
-  document.getElementById('dlgCancel').onclick = closeModal;
+  const cancelEl=document.getElementById('dlgCancel');
+  if(cancelEl) cancelEl.onclick = closeModal;
   document.getElementById('dlgOk').onclick = ()=>{ if(dlgOk && dlgOk()!==false) closeModal(); };
   const first = document.querySelector('#dlgBody input, #dlgBody textarea');
   if(first) setTimeout(()=>{ first.focus(); first.select && first.select(); }, 40);
@@ -1697,7 +1700,7 @@ function openLostDialog(){
     title:'未定位的笔记',
     sub:'这些笔记原本挂着的代码行已经找不到了。可以指定一个行号重新绑定，或者直接删掉。',
     body:'<div class="lostlist">'+body+'</div>',
-    okText:'完成', cancelText:'关闭'
+    okText:'完成', cancelText:false
   });
 
   document.querySelectorAll('.lostrow').forEach(row=>{
@@ -2483,6 +2486,6 @@ document.addEventListener('keydown',e=>{
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();
 </script>
-<script src="ui-refresh.js?v=20261104a"></script>
+<script src="ui-refresh.js?v=20261104b"></script>
 </body>
 </html>

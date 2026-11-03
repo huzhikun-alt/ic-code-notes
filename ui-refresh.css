@@ -385,3 +385,11 @@ html[data-note-mode="plain"] .slot{display:none}
   font-size:11.5px;color:var(--tx2);background:transparent}
 .chead .editbtn:hover{border-color:var(--line3);color:var(--ink)}
 .appmenu .ver{font:10px var(--mono);color:var(--dim);padding:3px 11px 6px;letter-spacing:.3px}
+
+/* themed chips: the old hard-coded dark values looked like blobs on light */
+.fcard .f .tg{color:var(--teal)}
+.warnchip{font:9px var(--mono);color:var(--rose);
+  background:color-mix(in srgb,var(--rose) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--rose) 32%,transparent);
+  border-radius:4px;padding:0 5px;flex:none;cursor:help}
+#tip .tg span{background:var(--surface-soft);color:var(--teal);border:1px solid var(--edge)}

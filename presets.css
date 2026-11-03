@@ -1,0 +1,128 @@
+
+/* ============================================================
+   Syntax tokens follow the active palette
+   ============================================================ */
+.tk-k{color:var(--t-k)}
+.tk-s{color:var(--t-s)}
+.tk-n{color:var(--t-n)}
+.tk-c{color:var(--t-c);font-style:italic}
+.tk-p{color:var(--t-p)}
+.fx{color:var(--t-fx);background:color-mix(in srgb,var(--t-fx) 13%,transparent);
+  border-bottom:1px solid color-mix(in srgb,var(--t-fx) 45%,transparent)}
+.fx.conflict{color:var(--rose);background:color-mix(in srgb,var(--rose) 14%,transparent)}
+
+/* ============================================================
+   Palettes
+   Values for Gruvbox and Nord are taken from the upstream
+   colorscheme files; the rest use the published palettes.
+   ============================================================ */
+
+/* --- 纸感浅色 (default light) --- */
+:root[data-preset="paper"]{
+  --bg:#f6f7f9; --paper:#ffffff; --surface:#ffffff; --surface-soft:#f3f5f8;
+  --edge:#e3e9f1; --edge-strong:#c8d4e2;
+  --ink:#1f2b3d; --tx2:#57667c; --muted:#697686;
+  --accent:#a8681f; --teal:#1f7f75; --rose:#b0455f;
+  --note-bg:#fff6e4; --note-ink:#6f5427; --note-edge:#e6cfa4;
+  --com-bg:#f6f8fa; --com-ink:#53667d;
+  --t-k:#7c3aad; --t-s:#2f6f3f; --t-n:#b35a1c; --t-c:#7c8896; --t-p:#33455c; --t-fx:#0f6076;
+}
+
+/* --- 石墨深色 (default dark) --- */
+:root[data-preset="graphite"]{
+  --bg:#0a0e13; --paper:#0d1218; --surface:#131b25; --surface-soft:#0f1620;
+  --edge:#212c3a; --edge-strong:#2f3d4f;
+  --ink:#e5ebf3; --tx2:#a9b7c9; --muted:#8190a4;
+  --accent:#e0b063; --teal:#5fd3c4; --rose:#ef8fa6;
+  --note-bg:#1f1a13; --note-ink:#e8d8b6; --note-edge:#4a3a22;
+  --com-bg:#131c27; --com-ink:#9db0c4;
+  --t-k:#c792ea; --t-s:#c3e88d; --t-n:#f78c6c; --t-c:#63728a; --t-p:#a8b6c8; --t-fx:#7fd8ff;
+}
+
+/* --- Gruvbox 深 --- */
+:root[data-preset="gruvbox-dark"]{
+  --bg:#282828; --paper:#282828; --surface:#32302f; --surface-soft:#1d2021;
+  --edge:#3c3836; --edge-strong:#504945;
+  --ink:#ebdbb2; --tx2:#d5c4a1; --muted:#a89984;
+  --accent:#fabd2f; --teal:#8ec07c; --rose:#fb4934;
+  --note-bg:#3a3427; --note-ink:#f2e5bc; --note-edge:#504945;
+  --com-bg:#32302f; --com-ink:#bdae93;
+  --t-k:#fb4934; --t-s:#b8bb26; --t-n:#d3869b; --t-c:#928374; --t-p:#ebdbb2; --t-fx:#fabd2f;
+}
+
+/* --- Gruvbox 浅 --- */
+:root[data-preset="gruvbox-light"]{
+  --bg:#fbf1c7; --paper:#fbf1c7; --surface:#f7ecc9; --surface-soft:#f2e5bc;
+  --edge:#e2d3ad; --edge-strong:#d5c4a1;
+  --ink:#3c3836; --tx2:#504945; --muted:#7c6f64;
+  --accent:#b57614; --teal:#427b58; --rose:#9d0006;
+  --note-bg:#f5e9c6; --note-ink:#5b4a2e; --note-edge:#ddc99c;
+  --com-bg:#f2e5bc; --com-ink:#665c54;
+  --t-k:#9d0006; --t-s:#79740e; --t-n:#8f3f71; --t-c:#928374; --t-p:#3c3836; --t-fx:#076678;
+}
+
+/* --- Nord --- */
+:root[data-preset="nord"]{
+  --bg:#2e3440; --paper:#2e3440; --surface:#3b4252; --surface-soft:#343b48;
+  --edge:#434c5e; --edge-strong:#4c566a;
+  --ink:#d8dee9; --tx2:#c2cad8; --muted:#98a4b8;
+  --accent:#ebcb8b; --teal:#88c0d0; --rose:#bf616a;
+  --note-bg:#3b4252; --note-ink:#e5e9f0; --note-edge:#4c566a;
+  --com-bg:#343b48; --com-ink:#b3bdcd;
+  --t-k:#81a1c1; --t-s:#a3be8c; --t-n:#b48ead; --t-c:#8b99ae; --t-p:#d8dee9; --t-fx:#88c0d0;
+}
+
+/* --- Solarized 深 --- */
+:root[data-preset="solarized-dark"]{
+  --bg:#002b36; --paper:#002b36; --surface:#073642; --surface-soft:#032a34;
+  --edge:#0f4753; --edge-strong:#1b5c69;
+  --ink:#b4c2c2; --tx2:#95a3a3; --muted:#809396;
+  --accent:#c99b1a; --teal:#33b3a8; --rose:#e35a57;
+  --note-bg:#073642; --note-ink:#eee8d5; --note-edge:#1b5c69;
+  --com-bg:#04303b; --com-ink:#9fb2b2;
+  --t-k:#a9bd25; --t-s:#39bcb0; --t-n:#e05f9c; --t-c:#7d9297; --t-p:#b4c2c2; --t-fx:#4aa3e0;
+}
+
+/* --- Solarized 浅 --- */
+:root[data-preset="solarized-light"]{
+  --bg:#fdf6e3; --paper:#fdf6e3; --surface:#fbf3dd; --surface-soft:#f5eeda;
+  --edge:#e6dfc8; --edge-strong:#d7cfb4;
+  --ink:#33474d; --tx2:#4d6269; --muted:#6d7a75;
+  --accent:#8f6a00; --teal:#17756e; --rose:#b02622;
+  --note-bg:#f7f0da; --note-ink:#33474d; --note-edge:#e0d6b6;
+  --com-bg:#f2ecd8; --com-ink:#52656b;
+  --t-k:#6c7a00; --t-s:#1c7d76; --t-n:#a92c62; --t-c:#78857e; --t-p:#33474d; --t-fx:#16688f;
+}
+
+/* --- Tokyo Night --- */
+:root[data-preset="tokyonight"]{
+  --bg:#1a1b26; --paper:#1a1b26; --surface:#1f2335; --surface-soft:#16161e;
+  --edge:#2a2f45; --edge-strong:#3b4261;
+  --ink:#c0caf5; --tx2:#a9b1d6; --muted:#8b93b5;
+  --accent:#e0af68; --teal:#7dcfff; --rose:#f7768e;
+  --note-bg:#24283b; --note-ink:#c0caf5; --note-edge:#3b4261;
+  --com-bg:#1f2335; --com-ink:#a9b1d6;
+  --t-k:#bb9af7; --t-s:#9ece6a; --t-n:#ff9e64; --t-c:#7c85a8; --t-p:#a9b1d6; --t-fx:#7dcfff;
+}
+
+/* --- One Dark --- */
+:root[data-preset="onedark"]{
+  --bg:#282c34; --paper:#282c34; --surface:#2c313a; --surface-soft:#21252b;
+  --edge:#3a404c; --edge-strong:#4b5263;
+  --ink:#c1c8d4; --tx2:#a3abb8; --muted:#8b939f;
+  --accent:#e5c07b; --teal:#56b6c2; --rose:#e06c75;
+  --note-bg:#33373f; --note-ink:#dcdfe4; --note-edge:#4b5263;
+  --com-bg:#2f343d; --com-ink:#a8b0bd;
+  --t-k:#c678dd; --t-s:#98c379; --t-n:#d19a66; --t-c:#7f8794; --t-p:#abb2bf; --t-fx:#61afef;
+}
+
+/* theme picker dialog */
+.presetlist{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:-2px 0 2px}
+.preset{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;
+  border:1px solid var(--edge);cursor:pointer;background:transparent;text-align:left}
+.preset:hover{border-color:var(--line3);background:var(--surface-soft)}
+.preset.on{border-color:var(--teal);background:color-mix(in srgb,var(--teal) 8%,transparent)}
+.preset .dots{display:flex;gap:3px;flex:none}
+.preset .dots i{width:11px;height:11px;border-radius:3px;display:block}
+.preset .nm{font-size:12.5px;color:var(--ink)}
+.preset .tag{font-size:10px;color:var(--muted);margin-left:auto}

@@ -18,12 +18,14 @@ with sync_playwright() as p:
     page.goto(Path(__file__).with_name('index.html').resolve().as_uri())
     page.evaluate('localStorage.clear()'); page.reload()
 
-    # 1. 改内置示例 → 刷新后仍在（以前 usingCustomData 为 false 时会丢）
+    # 1. 改内置示例 → 刷新后仍在；行末注释会被自动摘成卡片
     page.locator('.line .src').nth(1).click()
     page.locator('.src[contenteditable=true]').fill('use strict; # persisted')
     page.locator('#savedText').click()
     page.reload()
-    assert page.locator('.line .src').nth(1).inner_text() == 'use strict; # persisted', 'sample edit lost'
+    assert page.locator('.line .src').nth(1).inner_text() == 'use strict;', 'trailing comment not stripped'
+    assert page.locator('.nb.cmt').count() == 1
+    assert 'persisted' in page.locator('.nb.cmt').first.inner_text(), 'sample edit lost'
 
     # 2. 新建文件 → 第一行可见可编辑
     page.locator('#btnNewFile').click()

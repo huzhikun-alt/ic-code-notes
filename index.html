@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="light" data-note-mode="inline">
+<html lang="zh-CN" data-theme="light" data-note-mode="inline" data-preset="paper">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -374,6 +374,7 @@
   }
 </style>
 <link rel="stylesheet" href="ui-refresh.css">
+<link rel="stylesheet" href="presets.css">
 </head>
 <body>
 
@@ -390,6 +391,7 @@
     <button role="menuitem" id="btnUndo">撤销<kbd>Ctrl Z</kbd></button>
     <button role="menuitem" id="btnRedo">重做<kbd>Ctrl ⇧ Z</kbd></button>
     <button role="menuitem" id="btnExtract">摘出本文件注释</button>
+    <button role="menuitem" id="btnAutoComment">行末注释自动转卡片</button>
     <div class="sep"></div>
     <button role="menuitem" id="btnLost" hidden>未定位的笔记</button>
     <button role="menuitem" id="themeToggle">切换主题</button>
@@ -906,8 +908,12 @@ try{
   if(p && PROJECTS[p]) curProj=p;
 }catch(e){}
 
-function saveAll(){
-  try{
+/* 行末注释是否自动转成卡片（默认开） */
+function autoCommentOn(){
+  try{ return localStorage.getItem('icn-auto-comment') !== 'off'; }catch(e){ return true; }
+}
+
+function saveAll(){  try{
     localStorage.setItem(LS.lib, JSON.stringify(LIB));
     localStorage.setItem(LS.notes, JSON.stringify(NOTES));
     localStorage.setItem(LS.proj, curProj);
@@ -1705,6 +1711,17 @@ function addNote(no){
   if(b) b.focus();
 }
 
+/* 行末注释 → 右侧注释卡；同一行已有笔记时并排存放，不覆盖 */
+function attachComment(lineNo, cmtText, codeText){
+  const key=nkey();
+  NOTES[key]=NOTES[key]||{};
+  const ex=NOTES[key][lineNo];
+  const fp=hashLine(codeText);
+  if(!ex) NOTES[key][lineNo]={text:cmtText, fp, kind:'comment'};
+  else if(ex.kind==='comment'){ ex.text=(ex.text||'')+'\n'+cmtText; ex.fp=fp; }
+  else { ex.extracted=(ex.extracted? ex.extracted+'\n':'')+cmtText; ex.fp=fp; }
+}
+
 /* ---------- 行编辑 ---------- */
 let requestedCaret = null;
 function startEdit(i, caretOffset){
@@ -1718,8 +1735,18 @@ function commitEdit(i, insertAfter, deleteInstead, newText){
   const f=files()[cur];
   const row=codeEl.querySelector('.line[data-i="'+i+'"]');
   const src=row?row.querySelector('.src'):null;
-  const text=src?src.innerText.replace(/\n$/,'').replace(/\u00a0/g,''):f.lines[i];
+  let text=src?src.innerText.replace(/\n$/,'').replace(/\u00a0/g,''):f.lines[i];
   editingLine=-1;
+
+  /* 手动在行末敲的注释，提交时自动摘到右侧卡片 */
+  let trailing='';
+  if(!deleteInstead && autoCommentOn() && text.trim()){
+    const scan=extractComments(text, f.lang)[0];
+    if(scan && scan.cmt && scan.code.trim()){
+      text=scan.code.replace(/\s+$/,'');
+      trailing=scan.cmt;
+    }
+  }
   /* 改动前先记下这一行上挂着哪些笔记，改完把它们的指纹更新成新内容 */
   const beforeMap=resolveNotes(nkey(), f.lines);
   const touched=(beforeMap.byLine[i+1]||[]).map(e=>e.note);
@@ -1742,6 +1769,7 @@ function commitEdit(i, insertAfter, deleteInstead, newText){
 
   f.lines[i]=text;
   touched.forEach(n=>{ n.fp=hashLine(text); });
+  if(trailing) attachComment(i+1, trailing, text);
   if(insertAfter){
     f.lines.splice(i+1,0,newText||'');
     shiftNotes(i+2,1,false);

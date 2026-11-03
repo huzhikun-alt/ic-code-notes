@@ -12,17 +12,20 @@
 
 ## 界面与批注模式
 
-- 默认浅色，可切换深色；主题和批注模式独立保存。
+- **9 套配色**：纸感浅色、石墨深色、Gruvbox 深/浅、Nord、Solarized 深/浅、Tokyo Night、One Dark。
+  Gruvbox 与 Nord 的色值取自各自的 colorscheme 源文件；其余为公开配色。全部通过 WCAG 对比度校验（正文 ≥ 7:1，次要文字 ≥ 4:1）。
+- 主题与批注模式独立保存。
 - **行末批注（默认）**：卡片紧跟在代码行末尾，与代码行垂直居中；没有批注的行保持紧凑。
 - **右侧对齐**：固定右列 + 可拖动分隔条，多行批注仍下推后续代码。
 - **纯代码**：暂时隐藏批注，不删除数据。
 - 批注内 `Shift+Enter` 换行、`Enter` 完成编辑；没有手动换行、也没碰到右边界时不会折行。
-- 顶部只留一个 `⋯` 菜单：撤销 / 重做 / 摘注释 / 未定位的笔记 / 主题 / 快捷键 / 重置。
+- **手动敲的行末注释会自动转成右侧注释卡**（按语言分别识别 `#` 与 `//`），可在 `⋯` 菜单里关闭。
+- 顶部只留一个 `⋯` 菜单：撤销 / 重做 / 摘注释 / 行末注释自动转卡 / 未定位的笔记 / 配色 / 快捷键 / 重置。
 - 未定位的笔记收进弹窗，不再占据正文。
 - 批注的删除、固定等操作在该卡片悬停时出现，不占版面。
-- 鼠标悬停函数时弹出的说明卡可以直接编辑签名和描述，失焦即保存。
+- 悬停函数弹出的说明卡可直接编辑签名和描述，失焦即保存；点击页面其它位置会关闭它。
 
-界面回归测试：安装 Python Playwright 后运行 `python verify-ui.py`、`python verify-editing.py`、`python verify-redesign.py`（使用本机 Chrome）。
+界面回归测试：安装 Python Playwright 后运行 `python verify-ui.py`、`python verify-editing.py`、`python verify-redesign.py`、`python verify-presets.py`、`python verify-contrast.py`（使用本机 Chrome）。
 
 ## 它解决什么
 

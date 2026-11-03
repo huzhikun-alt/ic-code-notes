@@ -373,8 +373,8 @@
     .splitter{left:calc(100% - var(--notew,384px) - 21px)}
   }
 </style>
-<link rel="stylesheet" href="ui-refresh.css?v=20261103f">
-<link rel="stylesheet" href="presets.css?v=20261103f">
+<link rel="stylesheet" href="ui-refresh.css?v=20261104a">
+<link rel="stylesheet" href="presets.css?v=20261104a">
 </head>
 <body>
 
@@ -398,6 +398,8 @@
     <button role="menuitem" id="btnHelp">快捷键</button>
     <div class="sep"></div>
     <button role="menuitem" id="btnReset" class="dang">重置数据</button>
+    <div class="sep"></div>
+    <div class="ver" id="buildVer">构建 20261104-0030</div>
   </div>
 </div>
 
@@ -1643,6 +1645,10 @@ function renderCode(){
         }else{ r.selectNodeContents(ed); r.collapse(false); }
         requestedCaret = null;
         const s=getSelection(); s.removeAllRanges(); s.addRange(r);
+        /* 再补一次：防止点击事件后续的默认聚焦把光标抢走 */
+        setTimeout(()=>{
+          if(editingLine===i && document.activeElement!==ed){ ed.focus(); s.removeAllRanges(); s.addRange(r); }
+        }, 0);
       });
     }
   });
@@ -1951,7 +1957,9 @@ let bracketTimer=null;       // 括号单击延迟进入编辑，给双击留出
 codeEl.addEventListener('mousedown', e=>{
   downPt={x:e.clientX,y:e.clientY};
   const card=e.target.closest('.nb');
-  if(card && !e.target.closest('button')){
+  /* 只有在确实会触发重渲染（正在编辑代码行）时才记下要交还焦点的卡片，
+     否则这个记录会一直挂着，等下次重渲染时把焦点抢走 */
+  if(card && !e.target.closest('button') && editingLine>=0){
     pendingCardFocus = card.dataset.ln ? +card.dataset.ln : null;
   }
 }, true);
@@ -2475,6 +2483,6 @@ document.addEventListener('keydown',e=>{
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();
 </script>
-<script src="ui-refresh.js?v=20261103f"></script>
+<script src="ui-refresh.js?v=20261104a"></script>
 </body>
 </html>

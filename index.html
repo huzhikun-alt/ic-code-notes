@@ -1,0 +1,1486 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IC 代码笔记</title>
+<style>
+  :root{
+    --bg:#0d1117; --line:#222c3a; --line2:#31405a; --line3:#3d5273;
+    --tx:#d7dee9; --tx2:#9dabbd; --dim:#65758c;
+    --amber:#e0b464; --amber-d:#3a2f1b; --teal:#4fd0bf; --rose:#f2799b;
+    --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+    --sans:"Inter",-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--tx);font-family:var(--sans);overflow:hidden}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  input,textarea{font-family:var(--sans)}
+
+  /* ---------- top ---------- */
+  .top{height:50px;display:flex;align-items:center;gap:14px;padding:0 14px;
+       border-bottom:1px solid var(--line);background:#10161f}
+  .brand{font-weight:650;font-size:13.5px;display:flex;align-items:center;gap:8px}
+  .brand i{width:8px;height:8px;border-radius:2px;background:var(--amber);
+           box-shadow:0 0 10px rgba(224,180,100,.55)}
+  .tabs{display:flex;gap:2px;background:#0b0f15;padding:3px;border-radius:8px;border:1px solid var(--line)}
+  .tabs button{padding:5px 13px;border-radius:6px;font-size:12.2px;color:var(--tx2)}
+  .tabs button:hover{color:#fff}
+  .tabs button.on{background:#243040;color:#fff}
+  .sp{flex:1}
+  .saved{font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px}
+  .saved i{width:5px;height:5px;border-radius:50%;background:#3f7d5c;transition:.3s}
+  .saved.act i{background:var(--teal);box-shadow:0 0 8px rgba(79,208,191,.8)}
+  .iconbtn{padding:5px 10px;border:1px solid var(--line2);border-radius:7px;font-size:11.5px;
+           color:var(--tx2)}
+  .iconbtn:hover{color:#fff;border-color:var(--line3)}
+
+  /* ---------- shell ---------- */
+  .shell{display:flex;height:calc(100% - 50px)}
+  .nav{width:254px;flex:none;border-right:1px solid var(--line);background:#0a0e14;
+       display:flex;flex-direction:column;overflow:hidden}
+  .navscroll{flex:1;overflow-y:auto;padding-bottom:8px}
+
+  /* project */
+  .proj{position:relative;padding:10px 12px 8px;border-bottom:1px solid #161d27}
+  .projbtn{width:100%;display:flex;align-items:center;gap:8px;padding:8px 10px;
+           background:#101823;border:1px solid #24303f;border-radius:9px;text-align:left}
+  .projbtn:hover{border-color:var(--line2);background:#131d2a}
+  .projbtn .ico{width:16px;height:16px;border-radius:4px;background:#1d2a3a;display:flex;
+                align-items:center;justify-content:center;font-size:9px;color:var(--teal);
+                font-family:var(--mono);flex:none}
+  .projbtn .pn{flex:1;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .projbtn .pv{font-size:9px;color:var(--dim);flex:none}
+  .projmenu{position:absolute;left:12px;right:12px;top:56px;z-index:60;background:#151d29;
+            border:1px solid var(--line2);border-radius:10px;padding:5px;display:none;
+            box-shadow:0 20px 40px -16px #000}
+  .projmenu.on{display:block}
+  .pitem{padding:8px 9px;border-radius:7px;cursor:pointer}
+  .pitem:hover{background:#1e2a3a}
+  .pitem .t{font-size:12.4px}
+  .pitem .d{font-size:10.5px;color:var(--dim);margin-top:2px}
+  .pitem.cur .t{color:var(--amber)}
+  .pact{display:flex;gap:5px;padding:5px 4px 2px;border-top:1px solid #1e2836;margin-top:4px}
+  .pact button{flex:1;padding:5px;font-size:10.5px;color:var(--tx2);border-radius:6px}
+  .pact button:hover{background:#1e2a3a;color:#fff}
+  .pact button.dang:hover{background:#3a1c26;color:#ffb3c8}
+
+  .nlabel{display:flex;align-items:center;font-size:9.5px;letter-spacing:1.5px;color:var(--dim);
+          padding:12px 14px 6px;text-transform:uppercase;font-weight:600}
+  .nlabel span{flex:1}
+  .nlabel button{font-size:13px;color:var(--dim);padding:0 4px;line-height:1}
+  .nlabel button:hover{color:var(--amber)}
+
+  .cat{display:flex;align-items:center;gap:8px;padding:6px 14px;font-size:12.4px;
+       color:var(--tx2);cursor:pointer;border-left:2px solid transparent}
+  .cat:hover{background:#121821;color:var(--tx)}
+  .cat.on{background:#151d29;color:#fff;border-left-color:var(--amber)}
+  .cat .car{font-size:9px;color:var(--dim);width:9px;flex:none}
+  .cat.on .car{color:var(--amber)}
+  .cat .nm{flex:1}
+  .cat .c{font:10px var(--mono);color:var(--dim);background:#161e2a;border-radius:9px;
+          padding:0 6px;min-width:20px;text-align:center}
+  .cat.on .c{background:rgba(224,180,100,.14);color:var(--amber)}
+
+  .file{display:flex;align-items:center;gap:7px;padding:5px 8px 5px 32px;font-size:12px;
+        color:var(--tx2);cursor:pointer;border-left:2px solid transparent}
+  .file:hover{background:#121821;color:var(--tx)}
+  .file.on{background:#131b26;color:#fff;border-left-color:var(--teal)}
+  .file .ext{font:8.5px var(--mono);color:var(--dim);border:1px solid #2a3547;border-radius:3px;
+             padding:0 3px;text-transform:uppercase;flex:none}
+  .file.on .ext{color:var(--teal);border-color:#234744}
+  .file .fname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .file .dots{display:flex;gap:2px;flex:none}
+  .file .dots i{width:4px;height:4px;border-radius:50%;background:var(--amber);opacity:.75}
+  .file .more{opacity:0;font-size:12px;color:var(--dim);padding:0 2px;flex:none}
+  .file:hover .more{opacity:1}
+  .file .more:hover{color:#fff}
+  .fempty{padding:6px 14px 10px 32px;font-size:11px;color:#4a5a70}
+
+  /* fn list */
+  .fnsect{border-top:1px solid var(--line);margin-top:10px;padding-top:2px}
+  .fnhead{display:flex;align-items:center;padding:11px 12px 5px;gap:6px}
+  .fnhead .h{font-size:9.5px;letter-spacing:1.4px;color:var(--dim);text-transform:uppercase;
+             font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;
+             text-overflow:ellipsis}
+  .fnhead .g{font:9px var(--mono);color:var(--teal);border:1px solid #23403c;flex:none;
+             background:rgba(79,208,191,.08);border-radius:4px;padding:0 4px}
+  .fnhead .all{font-size:9.5px;color:var(--dim);border:1px solid var(--line2);border-radius:10px;
+               padding:1px 7px;flex:none}
+  .fnhead .all.on{background:rgba(224,180,100,.14);color:var(--amber);border-color:var(--amber-d)}
+  .searchwrap{padding:0 12px 6px}
+  .searchwrap input{width:100%;background:#0d131b;border:1px solid #232e3d;border-radius:7px;
+                    padding:6px 9px;color:var(--tx);font-size:11.5px;outline:none}
+  .searchwrap input:focus{border-color:var(--line3)}
+  .fnitem{display:flex;align-items:center;gap:7px;padding:5px 14px;font-size:11.8px;
+          color:var(--tx2);cursor:pointer}
+  .fnitem:hover{background:#121821;color:var(--tx)}
+  .fnitem .fname{font-family:var(--mono);color:#84c8e8;flex:1;overflow:hidden;
+                 text-overflow:ellipsis;white-space:nowrap}
+  .fnitem .fcount{font:9.5px var(--mono);color:#5b6d85}
+  .fnitem .xp{font:8.5px var(--mono);color:var(--teal);border:1px solid #23403c;
+              border-radius:3px;padding:0 3px}
+  .fnghost{padding:4px 14px 8px;font-size:11px;color:#4a5a70;line-height:1.6}
+  .catcap{font:9.5px var(--mono);color:#4f6076;letter-spacing:1px;padding:8px 14px 3px}
+  .io{padding:9px 12px;border-top:1px solid var(--line);display:flex;gap:6px}
+  .io button{flex:1;padding:6px;border:1px solid #24303f;border-radius:7px;font-size:10.5px;
+             color:var(--tx2)}
+  .io button:hover{color:#fff;border-color:var(--line2);background:#141e2a}
+
+  /* ---------- main ---------- */
+  .main{flex:1;overflow:hidden;position:relative}
+  .view{position:absolute;inset:0;overflow:auto;display:none}
+  .view.on{display:block}
+  .chead{position:sticky;top:0;z-index:20;height:36px;display:flex;align-items:center;gap:10px;
+         padding:0 18px;background:rgba(13,17,23,.94);backdrop-filter:blur(6px);
+         border-bottom:1px solid var(--line);font-size:11.5px}
+  .chead .p{font-family:var(--mono)}
+  .chead .lgb{font:9.5px var(--mono);padding:1px 6px;border-radius:4px;background:#16212e;
+              color:var(--teal);border:1px solid #23384a}
+  .chead .m{margin-left:auto;color:var(--dim)}
+  .chead .editbtn{font-size:11px;color:var(--dim);border:1px solid var(--line2);border-radius:5px;
+                  padding:1px 7px}
+  .chead .editbtn:hover{color:var(--amber);border-color:var(--amber-d)}
+
+  .code{padding:10px 0 90px}
+  .line{display:grid;grid-template-columns:minmax(0,1fr) 384px;column-gap:26px;
+        padding:0 22px;align-items:start}
+  .line:hover{background:rgba(255,255,255,.022)}
+  .line .cl{display:flex;gap:16px;min-width:0}
+  .line .num{width:30px;flex:none;text-align:right;color:#414e60;font:11px var(--mono);
+             line-height:25px;user-select:none}
+  .line.an .num{color:var(--amber)}
+  .line.editing{background:rgba(224,180,100,.06)}
+  .line .src{white-space:pre-wrap;overflow-wrap:anywhere;font:12.6px/25px var(--mono);
+             color:#c2d2e4;flex:1;min-width:0}
+  .line .src[contenteditable="true"]{outline:none;background:rgba(255,255,255,.05);
+              box-shadow:0 0 0 1px #4a3a1d;border-radius:3px;padding:0 3px;margin:0 -3px}
+  .line .slot{min-width:0}
+  .addnote{opacity:0;font-size:11px;color:#4a5a70;border:1px dashed #26303f;border-radius:6px;
+           padding:3px 9px;margin-top:2px;display:inline-block}
+  .line:hover .addnote{opacity:1}
+  .addnote:hover{color:var(--amber);border-color:var(--amber-d)}
+
+  .nb{background:#1a1610;border:1px solid #3b3120;border-left:2px solid var(--amber);
+      border-radius:0 8px 8px 0;padding:8px 12px;margin-top:-2px}
+  .nb .h{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+  .nb .h .tag{font:9.5px var(--mono);letter-spacing:.8px;color:var(--amber);opacity:.85}
+  .nb .h .lnk{font:9.5px var(--mono);color:#6d6350}
+  .nb .h .tools{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .nb .h button{font-size:10.5px;color:#7d7059}
+  .nb .h button:hover{color:var(--rose)}
+  .nb .h .st{font-size:9.5px;color:#5f7a63}
+  .nb .body{font-size:12.4px;line-height:1.78;color:#ddd3c1;white-space:pre-wrap;outline:none;
+            min-height:20px}
+  .nb .body:empty:before{content:"写点什么…  Ctrl+Enter 完成";color:#6b6252}
+  .nb .body:focus{box-shadow:0 0 0 1px #56462a;border-radius:3px}
+
+  .tk-k{color:#c792ea} .tk-s{color:#c3e88d} .tk-c{color:#55657c;font-style:italic}
+  .tk-n{color:#f78c6c} .tk-p{color:#8ea3bd}
+  .fx{color:#8ee0ff;background:rgba(127,216,255,.09);border-bottom:1px solid rgba(127,216,255,.5);
+      border-radius:2px;padding:0 1px;cursor:help}
+  .fx.conflict{color:#ffb3c8;background:rgba(242,121,155,.12);
+               border-bottom-color:rgba(242,121,155,.6)}
+
+  .editbar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:150;
+           background:#1b2531;border:1px solid var(--line2);border-radius:9px;padding:7px 14px;
+           font-size:11.5px;color:var(--tx2);display:none;gap:14px;align-items:center;
+           box-shadow:0 14px 34px -16px #000}
+  .editbar.on{display:flex}
+  .editbar b{color:var(--amber);font-weight:500}
+
+  .emptyfile{padding:70px 0;text-align:center;color:var(--dim);font-size:12.5px;line-height:2}
+  .emptyfile button{color:var(--amber);border-bottom:1px dashed var(--amber-d)}
+
+  /* tip */
+  #tip{position:fixed;z-index:200;width:340px;background:#18212e;border:1px solid #384860;
+       border-radius:10px;padding:12px 13px;font-size:12.3px;line-height:1.7;color:#d3deeb;
+       box-shadow:0 18px 44px -14px #000;display:none}
+  #tip .th{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+  #tip .nm{font:13px var(--mono);color:#8fe3ff;font-weight:600}
+  #tip .lg{font:9.5px var(--mono);padding:1px 5px;border-radius:3px;background:#20304a;
+           color:#7fb0e0;border:1px solid #2c425e}
+  #tip .sg{font:11px var(--mono);color:var(--dim);margin-bottom:8px;
+           border-bottom:1px dashed #2c3849;padding-bottom:7px;word-break:break-all}
+  #tip .ds{white-space:pre-wrap}
+  #tip .tg{margin-top:8px;display:flex;gap:5px;flex-wrap:wrap}
+  #tip .tg span{font-size:10.5px;padding:1px 6px;border-radius:9px;background:#20304a;color:#8fb4d8}
+  #tip .warn{margin-top:9px;padding:6px 8px;background:rgba(242,121,155,.1);
+             border-left:2px solid var(--rose);border-radius:0 5px 5px 0;font-size:11.2px;
+             line-height:1.6;color:#f0a8bb}
+  #tip .meta{margin-top:8px;font:10.5px var(--mono);color:var(--dim)}
+
+  /* menu */
+  #menu{position:fixed;z-index:300;min-width:200px;background:#18212e;border:1px solid #384860;
+        border-radius:9px;padding:5px;box-shadow:0 18px 40px -12px #000;display:none}
+  #menu button{display:block;width:100%;text-align:left;padding:7px 10px;border-radius:6px;
+               font-size:12.3px;color:#ccd8e7}
+  #menu button:hover{background:#233247;color:#fff}
+  #menu button:disabled{color:#57667c;cursor:default;background:none}
+  #menu button.dang{color:#e79bad}
+  #menu button.dang:hover{background:#3a1c26;color:#ffc4d3}
+  #menu .sep{height:1px;background:#283344;margin:4px 2px}
+  #menu .sel{font:10.5px var(--mono);color:var(--dim);padding:4px 10px 6px}
+
+  /* modal */
+  #mask{position:fixed;inset:0;background:rgba(6,9,13,.74);z-index:400;display:none;
+        align-items:center;justify-content:center;padding:20px}
+  #mask.on{display:flex}
+  .dlg{width:520px;max-height:88vh;overflow:auto;background:#141b25;border:1px solid #384860;
+       border-radius:13px;padding:20px 22px}
+  .dlg h3{font-size:15px;margin-bottom:4px}
+  .dlg .sub{font-size:12px;color:var(--dim);line-height:1.7;margin-bottom:15px}
+  .fld{margin-bottom:12px}
+  .fld label{display:block;font-size:10.5px;letter-spacing:.5px;color:var(--dim);margin-bottom:5px}
+  .fld input,.fld textarea{width:100%;background:#0c1118;border:1px solid #283444;border-radius:7px;
+        padding:9px 11px;color:var(--tx);font-size:12.5px;outline:none}
+  .fld textarea{min-height:92px;resize:vertical;line-height:1.7}
+  .fld input:focus,.fld textarea:focus{border-color:#3f5678}
+  .choices{display:flex;gap:6px;flex-wrap:wrap}
+  .choices button{padding:6px 13px;border:1px solid var(--line2);border-radius:7px;font-size:12px;
+                  color:var(--tx2)}
+  .choices button.on{background:rgba(224,180,100,.14);border-color:var(--amber-d);color:var(--amber)}
+  .dlg .act{display:flex;gap:9px;justify-content:flex-end;margin-top:16px}
+  .btn{padding:8px 15px;border-radius:8px;font-size:12.4px;border:1px solid var(--line2);
+       background:#19212c;color:var(--tx2)}
+  .btn:hover{color:#fff;background:#202b38}
+  .btn.pri{background:var(--amber);border-color:var(--amber);color:#1a1306;font-weight:600}
+  .btn.dang{background:#3a1c26;border-color:#5c2b3a;color:#ffb3c8}
+  .btn.dang:hover{background:#4d2431;color:#fff}
+  .scope{display:inline-block;font-size:11px;color:var(--teal);background:rgba(79,208,191,.08);
+         border:1px solid #21403c;border-radius:6px;padding:4px 9px}
+  .warnbox{font-size:12px;color:#f0a8bb;background:rgba(242,121,155,.08);border:1px solid #4a2532;
+           border-radius:8px;padding:10px 12px;line-height:1.7}
+
+  /* lib */
+  .lib{padding:22px 26px 70px;max-width:1060px}
+  .libhd{display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap}
+  .libhd h2{font-size:17px}
+  .libbadge{font:10px var(--mono);color:var(--teal);border:1px solid #23403c;
+            background:rgba(79,208,191,.08);border-radius:5px;padding:2px 7px}
+  .seg{display:flex;background:#0d131b;border:1px solid var(--line);border-radius:8px;padding:2px}
+  .seg button{padding:4px 11px;border-radius:6px;font-size:11.5px;color:var(--tx2)}
+  .seg button.on{background:#243040;color:#fff}
+  .libnote{font-size:11.8px;color:var(--dim);line-height:1.75;margin:8px 0 18px;max-width:760px}
+  .lgsec{display:flex;align-items:center;gap:8px;margin:16px 0 8px}
+  .lgsec h3{font:10px var(--mono);letter-spacing:1.1px;color:var(--dim)}
+  .lgsec i{flex:1;height:1px;background:var(--line)}
+  .fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:8px}
+  .fcard{background:#141b25;border:1px solid var(--line);border-left:2px solid var(--teal);
+         border-radius:8px;padding:9px 10px 8px;position:relative;transition:.13s}
+  .fcard:hover{border-color:var(--line2);background:#16202b}
+  .fcard.warn{border-left-color:var(--rose)}
+  .fcard .n{display:flex;align-items:center;gap:6px;padding-right:42px}
+  .fcard .lgd{font:8.5px var(--mono);padding:0 3px;border-radius:3px;background:#1b2634;
+              color:#7fb0e0;border:1px solid #26364c;flex:none;letter-spacing:.3px}
+  .fcard .nm{font:12.2px var(--mono);color:#8fe3ff;font-weight:600;overflow:hidden;
+             text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .fcard .s{font:9.8px var(--mono);color:var(--dim);margin:3px 0 6px;white-space:nowrap;
+            overflow:hidden;text-overflow:ellipsis}
+  .fcard .d{font-size:11.3px;line-height:1.6;color:#bcc9d8;white-space:normal;overflow:hidden;
+            display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .fcard .f{margin-top:7px;padding-top:6px;border-top:1px dashed #212b38;display:flex;gap:7px;
+            overflow:hidden;align-items:center;font-size:9.5px;color:var(--dim);
+            white-space:nowrap}
+  .fcard .f .cnt{flex:none;color:#7f90a6}
+  .fcard .f .tg{overflow:hidden;text-overflow:ellipsis;color:#8fb4d8;min-width:0}
+  .w{font:9.5px var(--mono);color:#7fb0e0;background:#182334;border:1px solid #24344a;
+     border-radius:4px;padding:0 5px;cursor:pointer;flex:none}
+  .w:hover{background:#1f2e42;color:#a8d4ff}
+  .warnchip{font:9px var(--mono);color:#d99bad;background:#211a1f;border:1px solid #3b2530;
+            border-radius:3px;padding:0 4px;flex:none;cursor:help}
+  .fcard .ed{position:absolute;top:8px;right:9px;font-size:9.5px;color:transparent;
+             display:flex;gap:7px}
+  .fcard:hover .ed{color:var(--dim)}
+  .fcard .ed button:hover{color:var(--amber)}
+  .fcard .ed .del:hover{color:var(--rose)}
+  .empty{color:var(--dim);font-size:12.4px;padding:30px 0;text-align:center}
+
+  #toast{position:fixed;bottom:24px;left:50%;transform:translate(-50%,12px);background:#1f2a38;
+    border:1px solid #384860;color:#e2eaf5;padding:9px 16px;border-radius:9px;font-size:12.4px;
+    opacity:0;pointer-events:none;transition:.2s;z-index:500}
+  #toast.on{opacity:1;transform:translate(-50%,0)}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:#222e3e;border-radius:5px}
+  @media (max-width:1320px){.line{grid-template-columns:minmax(0,1fr) 320px;column-gap:18px}}
+  @media (max-width:1080px){.line{grid-template-columns:minmax(0,1fr) 270px;column-gap:14px;
+                                padding:0 14px}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand"><i></i>IC 代码笔记</div>
+  <div class="tabs">
+    <button class="on" data-v="code">阅读</button>
+    <button data-v="lib">函数库</button>
+  </div>
+  <div class="sp"></div>
+  <div class="saved" id="saved"><i></i><span id="savedText">已保存</span></div>
+  <button class="iconbtn" id="btnHelp">快捷键</button>
+  <button class="iconbtn" id="btnReset">重置数据</button>
+</div>
+
+<div class="shell">
+  <aside class="nav">
+    <div class="proj">
+      <button class="projbtn" id="projBtn">
+        <span class="ico">◲</span><span class="pn" id="projName"></span><span class="pv">切换</span>
+      </button>
+      <div class="projmenu" id="projMenu">
+        <div id="projList"></div>
+        <div class="pact">
+          <button id="pNew">新建</button>
+          <button id="pRename">重命名</button>
+          <button id="pDelete" class="dang">删除</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="navscroll">
+      <div class="nlabel"><span id="navCount">文件</span><button id="btnNewFile" title="新建文件">＋</button></div>
+      <div id="cats"></div>
+
+      <div class="fnsect">
+        <div class="fnhead">
+          <span class="h">函数库 <span class="g">全局</span></span>
+          <button class="all" id="btnAll">全部</button>
+        </div>
+        <div class="searchwrap"><input id="fnSearch" placeholder="搜索函数…"></div>
+        <div id="fnList"></div>
+      </div>
+    </div>
+
+    <div class="io">
+      <button id="btnExport">导出 JSON</button>
+      <button id="btnImport">导入</button>
+      <input type="file" id="fileIn" accept=".json" style="display:none">
+    </div>
+  </aside>
+
+  <div class="main">
+    <section class="view on" id="v-code">
+      <div class="chead">
+        <span class="p" id="fpath"></span>
+        <span class="lgb" id="flang"></span>
+        <span class="m" id="fmeta"></span>
+      </div>
+      <div class="code" id="code"></div>
+    </section>
+
+    <section class="view" id="v-lib">
+      <div class="lib">
+        <div class="libhd">
+          <h2>函数库</h2>
+          <span class="libbadge">跨工程 · 只按语言隔离</span>
+          <button class="iconbtn" id="btnNewEntry">＋ 新建条目</button>
+          <div class="seg" id="seg"></div>
+        </div>
+        <div class="libnote">
+          函数库不属于任何一个工程：你在 <b>uart_log_tools</b> 里给 <code>normalize</code> 写的描述，
+          在 <b>dma_ctrl</b> 里打开同一个函数时照样能悬停看到。条目只按<b>语言</b>隔离。
+        </div>
+        <div id="libBody"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="editbar" id="editbar">
+  <span><b>Enter</b> 换行提交</span><span><b>Esc</b> 取消</span>
+  <span><b>空行按 Backspace</b> 删除该行</span>
+</div>
+
+<div id="tip"></div>
+<div id="menu"></div>
+<div id="mask"><div class="dlg" id="dlgBody"></div></div>
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   数据
+   ============================================================ */
+const PROJECTS = {
+  'uart_log_tools': {
+    desc:'UART 日志分析脚本集',
+    files:{
+      'uart_rx.pl': {path:'uart/uart_rx.pl', lang:'perl', lines:[
+        '#!/usr/bin/env perl','use strict;','use warnings;','',
+        '# 把一行日志拆成字段','sub parse_line {','    my ($line) = @_;',
+        '    my ($ts, $dir, $byte) = split /\\s+/, $line;',
+        '    return { ts => $ts, dir => $dir, byte => hex($byte) };','}','',
+        'sub normalize {','    my ($v) = @_;','    $v =~ s/^\\s+|\\s+$//gr;','}','','1;']},
+      'check_log.pl': {path:'uart/check_log.pl', lang:'perl', lines:[
+        '#!/usr/bin/env perl','use strict;','use warnings;','require "./uart_rx.pl";','',
+        'while (my $l = <STDIN>) {','    chomp $l;','    $l = normalize($l);',
+        '    next unless length $l;','    my $r = parse_line($l);',
+        '    printf "byte=%02X\\n", $r->{byte};','}']},
+      'analysis.py': {path:'tools/analysis.py', lang:'python', lines:[
+        'import json','','def normalize(value):','    return value.strip()','',
+        'def load(path):','    with open(path) as f:',
+        '        rows = [normalize(x) for x in f if x.strip()]','    return rows','',
+        'data = load("log.txt")','print(json.dumps(data, ensure_ascii=False))']},
+      'sat_alu.sv': {path:'rtl/sat_alu.sv', lang:'verilog', lines:[
+        'module sat_alu (','    input  logic [31:0] a_i,','    input  logic [31:0] b_i',
+        '    output logic [31:0] y_o',');','',
+        '  function automatic logic [31:0] sat_add(','      input logic [31:0] a,',
+        '      input logic [31:0] b','  );','    logic [32:0] wide;',
+        "    wide = {1'b0, a} + {1'b0, b};",
+        "    return wide[32] ? 32'hFFFF_FFFF : wide[31:0];",
+        '  endfunction','','  assign y_o = sat_add(a_i, b_i);','','endmodule']}
+    }
+  },
+  'dma_ctrl': {
+    desc:'DMA 控制器 RTL + 描述符脚本',
+    files:{
+      'dma_regs.pl': {path:'script/dma_regs.pl', lang:'perl', lines:[
+        '#!/usr/bin/env perl','use strict;','use warnings;','',
+        '# 本工程自己的 normalize：只裁掉行尾空白',
+        'sub normalize {','    my ($s) = @_;','    $s =~ s/\\s+$//r;','}','',
+        'sub load_desc {','    my ($path) = @_;','    open my $fh, "<", $path or die $!;',
+        '    my @rows = map { normalize($_) } <$fh>;','    return \\@rows;','}','',
+        'my $rows = load_desc("desc.txt");',
+        'my $rec  = parse_line($rows->[0]);','print $rec->{byte}, "\\n";']},
+      'dma_top.sv': {path:'rtl/dma_top.sv', lang:'verilog', lines:[
+        'module dma_top (','    input  logic        clk_i,','    input  logic        rst_n,',
+        '    input  logic [31:0] addr_i,','    output logic [31:0] len_o',');','',
+        '  logic [31:0] sum;',
+        "  assign sum   = sat_add(addr_i, 32'd16);",
+        '  assign len_o = sum;','','endmodule']},
+      'fifo_ctrl.sv': {path:'rtl/fifo_ctrl.sv', lang:'verilog', lines:[
+        'module fifo_ctrl (','    input  logic [31:0] wptr,','    input  logic [31:0] inc,',
+        '    output logic [31:0] nptr',');','',
+        "  assign nptr = sat_add(wptr, inc);",'','endmodule']}
+    }
+  }
+};
+
+const DEFS = {
+  perl: { parse_line:[{proj:'uart_log_tools',file:'uart_rx.pl',line:6}],
+          normalize:[{proj:'uart_log_tools',file:'uart_rx.pl',line:12},
+                     {proj:'dma_ctrl',file:'dma_regs.pl',line:6}] },
+  python: { normalize:[{proj:'uart_log_tools',file:'analysis.py',line:3}],
+            load:[{proj:'uart_log_tools',file:'analysis.py',line:6}] },
+  verilog:{ sat_add:[{proj:'uart_log_tools',file:'sat_alu.sv',line:7}] }
+};
+
+const LANGS = {perl:'Perl', python:'Python', verilog:'Verilog'};
+const LGB = {perl:'PL', python:'PY', verilog:'SV'};
+const EXT = {perl:'.pl / .pm', python:'.py', verilog:'.sv / .v'};
+const DEFEXT = {perl:'.pl', python:'.py', verilog:'.sv'};
+const KEYWORDS = {
+  perl:['use','strict','warnings','sub','my','return','if','else','unless','while','for',
+        'foreach','next','last','require','package','printf','print','chomp','split','hex',
+        'length','shift','push','map','open','die'],
+  python:['def','return','if','else','elif','for','while','import','from','with','open','as',
+          'in','class','lambda','print','True','False','None'],
+  verilog:['module','endmodule','input','output','logic','function','endfunction','automatic',
+           'assign','return','parameter','always_comb','always_ff','begin','end','if','else',
+           'case','endcase']
+};
+
+let LIB = {
+  perl:[
+    {name:'parse_line', sig:'parse_line($line) → hashref {ts, dir, byte}',
+     desc:'把一行 UART 日志拆成时间戳、方向、字节三个字段。\n注意：byte 已经 hex() 过，是数值不是字符串。',
+     tags:['解析','UART'], origin:{proj:'uart_log_tools',file:'uart_rx.pl',line:6}},
+    {name:'normalize', sig:'normalize($v) → $v',
+     desc:'Perl 版：去掉首尾空白。用 /r 非破坏替换，不修改原变量。\n（dma_ctrl 里那个同名函数只裁行尾，别弄混）',
+     tags:['字符串'], origin:{proj:'uart_log_tools',file:'uart_rx.pl',line:12}}
+  ],
+  python:[
+    {name:'normalize', sig:'normalize(value: str) → str',
+     desc:'Python 版：value.strip()。和 Perl 那个同名但行为不同。',
+     tags:['字符串'], origin:{proj:'uart_log_tools',file:'analysis.py',line:3}},
+    {name:'load', sig:'load(path) → list[str]',
+     desc:'逐行读文件，每行 normalize，并丢掉空行。', tags:['IO','读取'],
+     origin:{proj:'uart_log_tools',file:'analysis.py',line:6}}
+  ],
+  verilog:[
+    {name:'sat_add', sig:'function automatic logic [31:0] sat_add(a, b)',
+     desc:'饱和加法：溢出时钳到 32\'hFFFF_FFFF，不回绕。\n综合成多级比较器，路径比普通加法长。',
+     tags:['算术','饱和'], origin:{proj:'uart_log_tools',file:'sat_alu.sv',line:7}}
+  ]
+};
+
+let NOTES = {
+  'uart_log_tools::uart_rx.pl':{6:'parse_line 在这里定义。只做拆分和类型转换，没有副作用。',
+                                13:'normalize 用了 /r 修饰符，返回新串、不改 $v。'},
+  'uart_log_tools::check_log.pl':{8:'normalize 是从 uart_rx.pl require 进来的。悬停就能看到描述。',
+                                  10:'返回 hashref，取字段用 $r->{byte}，不是 $r{byte}。'},
+  'uart_log_tools::sat_alu.sv':{12:'先扩到 33 位再相加，第 32 位就是进位。'},
+  'dma_ctrl::dma_regs.pl':{6:'⚠ 这个 normalize 和 uart_log_tools 里的不是同一个：它只裁行尾。'}
+};
+
+/* ============================================================
+   状态 + 存储
+   ============================================================ */
+let curProj = 'uart_log_tools';
+let cur = 'check_log.pl';
+let activeLang = 'perl';
+let libFilter = 'all';
+let fnQuery = '';
+let editingLine = -1;      // 0-based；-1 表示没有在编辑代码
+
+const LS = {lib:'icn-lib', notes:'icn-notes', proj:'icn-proj', data:'icn-data'};
+let usingCustomData = false;
+
+try{
+  const custom = localStorage.getItem(LS.data);
+  if(custom){
+    const d = JSON.parse(custom);
+    if(d && d.projects){ Object.keys(PROJECTS).forEach(k=>delete PROJECTS[k]);
+      Object.assign(PROJECTS, d.projects); usingCustomData = true; }
+  }
+  const l=localStorage.getItem(LS.lib), n=localStorage.getItem(LS.notes), p=localStorage.getItem(LS.proj);
+  if(l) LIB=JSON.parse(l);
+  if(n) NOTES=JSON.parse(n);
+  if(p && PROJECTS[p]) curProj=p;
+}catch(e){}
+
+function saveAll(){
+  try{
+    localStorage.setItem(LS.lib, JSON.stringify(LIB));
+    localStorage.setItem(LS.notes, JSON.stringify(NOTES));
+    localStorage.setItem(LS.proj, curProj);
+    if(usingCustomData) localStorage.setItem(LS.data, JSON.stringify({projects:PROJECTS}));
+  }catch(e){}
+  markSaved();
+}
+let savedTimer=null;
+function markSaved(){
+  const el=document.getElementById('saved');
+  el.classList.add('act');
+  document.getElementById('savedText').textContent='已保存';
+  clearTimeout(savedTimer);
+  savedTimer=setTimeout(()=>el.classList.remove('act'),900);
+}
+
+const files = () => PROJECTS[curProj].files;
+const nkey  = () => curProj + '::' + cur;
+const hasFile = () => !!(PROJECTS[curProj] && PROJECTS[curProj].files[cur]);
+
+/* 恢复时兜底 */
+if(!hasFile()){
+  const ks = Object.keys(PROJECTS[curProj].files);
+  cur = ks[0] || null;
+}
+activeLang = cur ? PROJECTS[curProj].files[cur].lang : 'perl';
+
+/* ============================================================
+   通用
+   ============================================================ */
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function tokenize(line, lang){
+  const out=[], cm = lang==='verilog' ? '//' : '#';
+  let i=0;
+  while(i<line.length){
+    if(line.startsWith(cm,i)){ out.push({t:'c',v:line.slice(i)}); break; }
+    const ch=line[i];
+    if(ch==='"'||ch==="'"){
+      let j=i+1; while(j<line.length&&line[j]!==ch){ if(line[j]==='\\') j++; j++; }
+      out.push({t:'s',v:line.slice(i,j+1)}); i=j+1; continue;
+    }
+    const id=/^[A-Za-z_]\w*/.exec(line.slice(i));
+    if(id){ out.push({t:'id',v:id[0]}); i+=id[0].length; continue; }
+    const nu=/^\d[\w']*/.exec(line.slice(i));
+    if(nu){ out.push({t:'n',v:nu[0]}); i+=nu[0].length; continue; }
+    out.push({t:'p',v:ch}); i++;
+  }
+  return out;
+}
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('on');
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2300);
+}
+
+/* ---------- 通用菜单 ---------- */
+const menuEl = document.getElementById('menu');
+function showMenu(x, y, items){
+  menuEl.replaceChildren();
+  items.forEach(it=>{
+    if(it.sep){ const s=document.createElement('div'); s.className='sep'; menuEl.appendChild(s); return; }
+    if(it.label===undefined){ const s=document.createElement('div');
+      s.className='sel'; s.textContent=it.text; menuEl.appendChild(s); return; }
+    const b=document.createElement('button');
+    b.textContent=it.label;
+    if(it.danger) b.className='dang';
+    if(it.disabled){ b.disabled=true; }
+    b.onclick=()=>{ hideMenu(); it.onClick && it.onClick(); };
+    menuEl.appendChild(b);
+  });
+  menuEl.style.display='block';
+  menuEl.style.left=Math.min(x, innerWidth-menuEl.offsetWidth-8)+'px';
+  menuEl.style.top=Math.min(y, innerHeight-menuEl.offsetHeight-8)+'px';
+}
+function hideMenu(){ menuEl.style.display='none'; }
+document.addEventListener('click', e=>{ if(!menuEl.contains(e.target)) hideMenu(); });
+
+/* ---------- 通用弹窗 ---------- */
+const mask = document.getElementById('mask');
+let dlgOk = null;
+function openModal({title, sub, body, okText='确定', okClass='', cancelText='取消', onOk}){
+  document.getElementById('dlgBody').innerHTML =
+    '<h3>'+esc(title)+'</h3>'+(sub?'<div class="sub">'+sub+'</div>':'')+body+
+    '<div class="act"><button class="btn" id="dlgCancel">'+esc(cancelText)+'</button>'+
+    '<button class="btn '+okClass+'" id="dlgOk">'+esc(okText)+'</button></div>';
+  mask.classList.add('on');
+  dlgOk = onOk;
+  document.getElementById('dlgCancel').onclick = closeModal;
+  document.getElementById('dlgOk').onclick = ()=>{ if(dlgOk && dlgOk()!==false) closeModal(); };
+  const first = document.querySelector('#dlgBody input, #dlgBody textarea');
+  if(first) setTimeout(()=>{ first.focus(); first.select && first.select(); }, 40);
+}
+function closeModal(){ mask.classList.remove('on'); dlgOk=null; }
+mask.addEventListener('click', e=>{ if(e.target===mask) closeModal(); });
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){ if(mask.classList.contains('on')) closeModal(); hideMenu(); hideTip(); }
+  if(e.key==='Enter' && mask.classList.contains('on')){
+    const tag=(e.target.tagName||'').toLowerCase();
+    if(tag==='input' && dlgOk){ e.preventDefault(); if(dlgOk()!==false) closeModal(); }
+  }
+});
+
+/* ============================================================
+   工程
+   ============================================================ */
+function renderProj(){
+  document.getElementById('projName').textContent = curProj;
+  const list = document.getElementById('projList');
+  list.replaceChildren();
+  Object.entries(PROJECTS).forEach(([pk,pr])=>{
+    const d=document.createElement('div');
+    d.className='pitem'+(pk===curProj?' cur':'');
+    d.innerHTML='<div class="t">'+esc(pk)+(pk===curProj?' ✓':'')+'</div>'+
+                '<div class="d">'+esc(pr.desc||'')+' · '+Object.keys(pr.files).length+' 个文件</div>';
+    d.onclick=()=>{
+      hideProjMenu();
+      if(pk===curProj) return;
+      curProj=pk;
+      const ks=Object.keys(pr.files);
+      cur = ks[0] || null;
+      activeLang = cur ? pr.files[cur].lang : 'perl';
+      saveAll(); renderProj(); renderNav(); renderCode();
+      toast('已切换到工程 '+pk);
+    };
+    list.appendChild(d);
+  });
+  document.getElementById('projBtn').onclick = e=>{
+    e.stopPropagation();
+    document.getElementById('projMenu').classList.toggle('on');
+  };
+}
+function hideProjMenu(){ document.getElementById('projMenu').classList.remove('on'); }
+document.addEventListener('click', e=>{
+  if(!document.getElementById('projMenu').contains(e.target) &&
+     !document.getElementById('projBtn').contains(e.target)) hideProjMenu();
+});
+
+document.getElementById('pNew').onclick = ()=>{
+  hideProjMenu();
+  openModal({
+    title:'新建工程', sub:'工程是容器；函数库不跟着工程走，仍然全局共享。',
+    body:'<div class="fld"><label>工程名</label><input id="mName" placeholder="例如 adc_chain"></div>'+
+         '<div class="fld"><label>一句话描述</label><input id="mDesc" placeholder="ADC 采样链路"></div>',
+    okText:'创建',
+    onOk(){
+      const name=document.getElementById('mName').value.trim();
+      if(!name){ toast('工程名不能为空'); return false; }
+      if(PROJECTS[name]){ toast('工程已存在'); return false; }
+      PROJECTS[name]={desc:document.getElementById('mDesc').value.trim()||'新工程',files:{}};
+      curProj=name; cur=null; usingCustomData=true; activeLang='perl';
+      saveAll(); renderProj(); renderNav(); renderCode();
+      toast('工程已创建，先建一个文件');
+      newFileDialog();
+      return true;
+    }
+  });
+};
+
+document.getElementById('pRename').onclick = ()=>{
+  hideProjMenu();
+  openModal({
+    title:'重命名工程',
+    body:'<div class="fld"><label>工程名</label><input id="mName" value="'+esc(curProj)+'"></div>',
+    okText:'保存',
+    onOk(){
+      const name=document.getElementById('mName').value.trim();
+      if(!name || name===curProj){ return true; }
+      if(PROJECTS[name]){ toast('同名工程已存在'); return false; }
+      const parts=Object.keys(PROJECTS);
+      const rebuilt={};
+      parts.forEach(k=>{ rebuilt[k===curProj?name:k]=PROJECTS[k]; });
+      Object.keys(PROJECTS).forEach(k=>delete PROJECTS[k]);
+      Object.assign(PROJECTS,rebuilt);
+      Object.keys(NOTES).forEach(k=>{
+        if(k.startsWith(curProj+'::')){ NOTES[name+'::'+k.slice(curProj.length+2)]=NOTES[k]; delete NOTES[k]; }
+      });
+      Object.values(DEFS).forEach(g=>Object.values(g).forEach(arr=>arr.forEach(d=>{
+        if(d.proj===curProj) d.proj=name; })));
+      curProj=name; usingCustomData=true;
+      saveAll(); renderProj(); renderNav(); renderCode(); toast('已重命名');
+      return true;
+    }
+  });
+};
+
+document.getElementById('pDelete').onclick = ()=>{
+  hideProjMenu();
+  const n=Object.keys(PROJECTS).length;
+  if(n<=1){ toast('至少保留一个工程'); return; }
+  openModal({
+    title:'删除工程 '+curProj,
+    sub:'这个工程下的文件、笔记都会一起删掉。函数库不受影响。',
+    body:'<div class="warnbox">不可撤销。确定要删除 <b>'+esc(curProj)+'</b> 吗？</div>',
+    okText:'删除', okClass:'dang',
+    onOk(){
+      delete PROJECTS[curProj];
+      Object.keys(NOTES).forEach(k=>{ if(k.startsWith(curProj+'::')) delete NOTES[k]; });
+      curProj=Object.keys(PROJECTS)[0];
+      const ks=Object.keys(PROJECTS[curProj].files);
+      cur=ks[0]||null;
+      activeLang=cur?PROJECTS[curProj].files[cur].lang:'perl';
+      usingCustomData=true;
+      saveAll(); renderProj(); renderNav(); renderCode(); toast('工程已删除');
+      return true;
+    }
+  });
+};
+
+/* ============================================================
+   文件 CRUD
+   ============================================================ */
+function newFileDialog(){
+  let lang='perl';
+  openModal({
+    title:'新建文件',
+    sub:'文件语言决定它会被函数库里哪一类条目命中。',
+    body:'<div class="fld"><label>文件名</label><input id="mName" placeholder="new_module'+DEFEXT[lang]+'"></div>'+
+         '<div class="fld"><label>语言</label><div class="choices" id="mLang">'+
+           Object.keys(LANGS).map(l=>'<button data-l="'+l+'" class="'+(l===lang?'on':'')+'">'+
+             LANGS[l]+'</button>').join('')+'</div></div>',
+    okText:'创建',
+    onMount(){},
+    onOk(){
+      const f=files();
+      let name=document.getElementById('mName').value.trim();
+      if(!name){ toast('文件名不能为空'); return false; }
+      if(!name.includes('.')) name+=DEFEXT[lang];
+      if(f[name]){ toast('同名文件已存在'); return false; }
+      f[name]={path:(activeLang==='all'||!f[name]?'':'')+name, lang, lines:['']};
+      cur=name; activeLang=lang; usingCustomData=true;
+      saveAll(); renderProj(); renderNav(); renderCode();
+      toast('已创建 '+name);
+      startEdit(0);
+      return true;
+    }
+  });
+  // 语言选择
+  const box=document.getElementById('mLang');
+  box.addEventListener('click', e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    lang=b.dataset.l;
+    [...box.children].forEach(x=>x.classList.toggle('on',x===b));
+    const inp=document.getElementById('mName');
+    if(!inp.value) inp.placeholder='new_module'+DEFEXT[lang];
+  });
+}
+document.getElementById('btnNewFile').onclick = ()=>{
+  if(!PROJECTS[curProj]) return;
+  newFileDialog();
+};
+
+function renameFileDialog(k){
+  openModal({
+    title:'重命名文件',
+    body:'<div class="fld"><label>文件名</label><input id="mName" value="'+esc(k)+'"></div>',
+    okText:'保存',
+    onOk(){
+      const f=files();
+      const name=document.getElementById('mName').value.trim();
+      if(!name || name===k) return true;
+      if(f[name]){ toast('同名文件已存在'); return false; }
+      const entry=f[k];
+      entry.path = entry.path.replace(new RegExp(escRe(k)+'$'), name);
+      f[name]=entry; delete f[k];
+      if(NOTES[curProj+'::'+k]){ NOTES[curProj+'::'+name]=NOTES[curProj+'::'+k];
+        delete NOTES[curProj+'::'+k]; }
+      if(cur===k) cur=name;
+      usingCustomData=true; saveAll(); renderNav(); renderCode(); toast('已重命名');
+      return true;
+    }
+  });
+}
+const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+
+function duplicateFile(k){
+  const f=files(), src=f[k];
+  let name=k.replace(/(\.[^.]+)$/, '_copy$1');
+  let n=2; while(f[name]) name=k.replace(/(\.[^.]+)$/, '_copy'+(n++)+'$1');
+  f[name]={path:src.path.replace(new RegExp(escRe(k)+'$'),name), lang:src.lang,
+           lines:src.lines.slice()};
+  const n0=NOTES[curProj+'::'+k];
+  if(n0) NOTES[curProj+'::'+name]=JSON.parse(JSON.stringify(n0));
+  usingCustomData=true; saveAll(); renderNav();
+  toast('已复制为 '+name);
+}
+
+function deleteFile(k){
+  openModal({
+    title:'删除文件 '+k,
+    sub:'文件里的笔记会一起删除。',
+    body:'<div class="warnbox">不可撤销。</div>',
+    okText:'删除', okClass:'dang',
+    onOk(){
+      delete files()[k];
+      delete NOTES[curProj+'::'+k];
+      if(cur===k){ const ks=Object.keys(files()); cur=ks[0]||null; }
+      usingCustomData=true; saveAll(); renderNav(); renderCode(); toast('已删除');
+      return true;
+    }
+  });
+}
+
+/* ============================================================
+   左侧导航
+   ============================================================ */
+function renderNav(){
+  const f = hasFile() || Object.keys(files()).length ? files() : {};
+  const cats=document.getElementById('cats');
+  cats.replaceChildren();
+  document.getElementById('navCount').textContent =
+    '文件 ' + Object.keys(f).length + ' 个';
+
+  ['all', ...Object.keys(LANGS)].forEach(lg=>{
+    const list=Object.keys(f).filter(k=>lg==='all'||f[k].lang===lg);
+    if(!list.length && lg!=='all') return;
+    const open=activeLang===lg;
+
+    const cat=document.createElement('div');
+    cat.className='cat'+(open?' on':'');
+    cat.innerHTML='<span class="car">'+(open?'▾':'▸')+'</span>'+
+      '<span class="nm">'+(lg==='all'?'全部文件':LANGS[lg])+'</span>'+
+      '<span class="c">'+list.length+'</span>';
+    cat.onclick=()=>{ activeLang=lg; renderNav(); };
+    cats.appendChild(cat);
+
+    if(open){
+      if(!list.length){
+        const e=document.createElement('div');
+        e.className='fempty'; e.textContent='还没有文件，点上方 ＋ 新建';
+        cats.appendChild(e);
+      }
+      list.forEach(k=>{
+        const fo=f[k], key=curProj+'::'+k;
+        const nn=NOTES[key]?Object.keys(NOTES[key]).length:0;
+        const d=document.createElement('div');
+        d.className='file'+(k===cur?' on':'');
+        d.innerHTML='<span class="ext">'+(fo.lang==='verilog'?'sv':fo.lang==='python'?'py':'pl')+
+          '</span><span class="fname">'+esc(k)+'</span>'+
+          '<span class="dots">'+'<i></i>'.repeat(Math.min(nn,5))+'</span>'+
+          '<button class="more" title="更多">⋯</button>';
+        d.onclick=e=>{
+          if(e.target.closest('.more')) return;
+          cur=k; activeLang=fo.lang; renderNav(); renderCode(); showView('code');
+        };
+        d.querySelector('.more').onclick=e=>{
+          e.stopPropagation();
+          const r=e.target.getBoundingClientRect();
+          showMenu(r.left-140, r.bottom+6, [
+            {label:'重命名', onClick:()=>renameFileDialog(k)},
+            {label:'复制一份', onClick:()=>duplicateFile(k)},
+            {sep:true},
+            {label:'删除文件', danger:true, onClick:()=>deleteFile(k)}
+          ]);
+        };
+        d.oncontextmenu=e=>{
+          e.preventDefault();
+          showMenu(e.clientX, e.clientY, [
+            {text:'文件：'+k},
+            {label:'重命名', onClick:()=>renameFileDialog(k)},
+            {label:'复制一份', onClick:()=>duplicateFile(k)},
+            {sep:true},
+            {label:'删除文件', danger:true, onClick:()=>deleteFile(k)}
+          ]);
+        };
+        cats.appendChild(d);
+      });
+    }
+  });
+  renderFnList();
+}
+
+function countUses(lang, name, projScope){
+  let n=0; const fs=new Set(), ps=new Set();
+  Object.entries(PROJECTS).forEach(([pk,pr])=>{
+    if(projScope && pk!==projScope) return;
+    Object.entries(pr.files).forEach(([fk,f])=>{
+      if(f.lang!==lang) return;
+      f.lines.forEach(l=>tokenize(l,f.lang).forEach(t=>{
+        if(t.t==='id'&&t.v===name){ n++; fs.add(pk+'::'+fk); ps.add(pk); }
+      }));
+    });
+  });
+  return {n, files:[...fs], projs:[...ps]};
+}
+const defsOf=(lang,name)=>(DEFS[lang]&&DEFS[lang][name])||[];
+const findEntry=(lang,name)=>(LIB[lang]||[]).find(x=>x.name===name);
+
+function conflictOf(lang,name){
+  const en=findEntry(lang,name);
+  if(!en||!en.origin) return null;
+  const local=defsOf(lang,name).find(d=>d.proj===curProj);
+  if(!local) return null;
+  if(local.proj===en.origin.proj && local.file===en.origin.file && local.line===en.origin.line) return null;
+  return local;
+}
+
+function renderFnList(){
+  const q=fnQuery.toLowerCase();
+  const scopeLang = activeLang==='all'?null:activeLang;
+  const listEl=document.getElementById('fnList');
+  listEl.replaceChildren();
+  document.getElementById('btnAll').classList.toggle('on', activeLang==='all');
+
+  const groups = scopeLang?[scopeLang]:Object.keys(LANGS);
+  let shown=0;
+
+  groups.forEach(lg=>{
+    const items=(LIB[lg]||[]).filter(en=>!q||
+      en.name.toLowerCase().includes(q)||(en.desc||'').toLowerCase().includes(q)||
+      (en.tags||[]).some(t=>t.toLowerCase().includes(q)));
+    if(!items.length) return;
+    if(!scopeLang){
+      const cap=document.createElement('div');
+      cap.className='catcap'; cap.textContent=LANGS[lg].toUpperCase();
+      listEl.appendChild(cap);
+    }
+    items.forEach(en=>{
+      const u=countUses(lg,en.name,null);
+      const d=document.createElement('div');
+      d.className='fnitem';
+      d.innerHTML='<span class="fname">'+esc(en.name)+'</span>'+
+        (u.projs.length>1?'<span class="xp">×'+u.projs.length+'</span>':'')+
+        '<span class="fcount">'+u.n+'</span>';
+      d.onclick=()=>{
+        const t=u.files[0];
+        if(!t){ toast('这个函数目前没有出现在任何文件里'); return; }
+        const [pk,fk]=t.split('::');
+        curProj=pk; cur=fk; activeLang=PROJECTS[pk].files[fk].lang;
+        saveAll(); renderProj(); renderNav(); renderCode(); showView('code');
+        flash(en.name);
+      };
+      listEl.appendChild(d); shown++;
+    });
+  });
+
+  if(!shown){
+    const g=document.createElement('div');
+    g.className='fnghost';
+    g.textContent = scopeLang?'这个语言下还没有条目。':'还没有函数。';
+    listEl.appendChild(g);
+  }
+}
+
+function flash(name){
+  requestAnimationFrame(()=>{
+    const el=[...document.querySelectorAll('#code .fx')].find(e=>e.dataset.name===name);
+    if(el){ el.scrollIntoView({block:'center',behavior:'smooth'});
+      el.style.transition='none'; el.style.background='rgba(224,180,100,.55)';
+      setTimeout(()=>{el.style.transition='background .8s'; el.style.background='';},400); }
+  });
+}
+
+/* ============================================================
+   代码渲染 + 行内编辑
+   ============================================================ */
+const codeEl = document.getElementById('code');
+
+function renderCode(){
+  codeEl.replaceChildren();
+  document.getElementById('fpath').textContent = hasFile() ? curProj+'/'+files()[cur].path : curProj;
+  document.getElementById('flang').textContent = hasFile()?LANGS[files()[cur].lang]:'—';
+
+  if(!hasFile()){
+    document.getElementById('fmeta').textContent='';
+    const e=document.createElement('div');
+    e.className='emptyfile';
+    e.innerHTML='这个工程还没有文件。<br><button id="eNew">＋ 新建一个文件</button>';
+    codeEl.appendChild(e);
+    e.querySelector('#eNew').onclick=newFileDialog;
+    return;
+  }
+
+  const f=files()[cur];
+  const names=new Set((LIB[f.lang]||[]).map(x=>x.name));
+  const kws=new Set(KEYWORDS[f.lang]||[]);
+  const notes=NOTES[nkey()]||{};
+
+  document.getElementById('fmeta').textContent =
+    f.lines.length+' 行 · '+Object.keys(notes).length+' 条笔记';
+
+  f.lines.forEach((line,i)=>{
+    const no=i+1, has=notes[no]!==undefined;
+    const row=document.createElement('div');
+    row.className='line'+(has?' an':'')+(i===editingLine?' editing':'');
+
+    const cl=document.createElement('div');
+    cl.className='cl';
+    const num=document.createElement('span');
+    num.className='num'; num.textContent=no;
+
+    const src=document.createElement('span');
+    src.className='src'; src.dataset.i=i;
+    if(i===editingLine){
+      src.contentEditable='true';
+      src.textContent=line;
+    }else{
+      tokenize(line,f.lang).forEach(tk=>{
+        const s=document.createElement('span');
+        if(tk.t==='id'&&names.has(tk.v)){
+          s.className='fx'+(conflictOf(f.lang,tk.v)?' conflict':'');
+          s.dataset.name=tk.v;
+        }else{
+          s.className='tk-'+(tk.t==='id'?(kws.has(tk.v)?'k':'p'):tk.t);
+        }
+        s.textContent=tk.v;
+        src.appendChild(s);
+      });
+      if(!line) src.innerHTML='&nbsp;';
+    }
+    cl.append(num,src);
+
+    const slot=document.createElement('div');
+    slot.className='slot';
+    if(has) slot.appendChild(buildNoteCard(no,notes[no]));
+    else{
+      const add=document.createElement('button');
+      add.className='addnote'; add.textContent='+ 写笔记';
+      add.onclick=()=>addNote(no);
+      slot.appendChild(add);
+    }
+
+    row.append(cl,slot);
+    row.dataset.i=i;
+    codeEl.appendChild(row);
+
+    if(i===editingLine){
+      const ed=src;
+      ed.addEventListener('keydown',ev=>{
+        if(ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); commitEdit(i,true); }
+        else if(ev.key==='Escape'){ ev.preventDefault(); cancelEdit(); }
+        else if(ev.key==='Backspace' && ed.innerText.trim()==='' ){ ev.preventDefault(); commitEdit(i,true,true); }
+      });
+      ed.addEventListener('blur',()=>{ if(editingLine===i) commitEdit(i,false); });
+      requestAnimationFrame(()=>{
+        ed.focus();
+        const r=document.createRange(); r.selectNodeContents(ed); r.collapse(false);
+        const s=getSelection(); s.removeAllRanges(); s.addRange(r);
+      });
+    }
+  });
+
+  document.getElementById('editbar').classList.toggle('on', editingLine>=0);
+}
+
+function buildNoteCard(no,text){
+  const nb=document.createElement('div');
+  nb.className='nb'; nb.dataset.ln=no;
+  const h=document.createElement('div');
+  h.className='h';
+  h.innerHTML='<span class="tag">我的笔记</span><span class="lnk">第 '+no+' 行</span>';
+  const tools=document.createElement('div');
+  tools.className='tools';
+  const st=document.createElement('span'); st.className='st'; st.textContent='自动保存';
+  const del=document.createElement('button'); del.textContent='删除';
+  del.onclick=()=>{ delete NOTES[nkey()][no]; saveAll(); renderCode(); };
+  tools.append(st,del);
+  h.appendChild(tools);
+
+  const body=document.createElement('div');
+  body.className='body'; body.contentEditable='true';
+  body.textContent=text;
+  body.addEventListener('input',()=>{ NOTES[nkey()][no]=body.innerText; saveAll(); });
+  body.addEventListener('keydown',ev=>{
+    if(ev.key==='Enter'&&(ev.ctrlKey||ev.metaKey)){ ev.preventDefault(); body.blur(); }
+    if(ev.key==='Escape'){ body.blur(); }
+  });
+  body.addEventListener('blur',()=>{
+    const nm=NOTES[nkey()];
+    if(nm && nm[no]!==undefined && nm[no].trim()===''){
+      delete nm[no]; saveAll(); renderCode();
+    }
+  });
+  nb.append(h,body);
+  return nb;
+}
+
+function addNote(no){
+  NOTES[nkey()]=NOTES[nkey()]||{};
+  NOTES[nkey()][no]='';
+  saveAll(); renderCode();
+  const b=document.querySelector('.nb[data-ln="'+no+'"] .body');
+  if(b) b.focus();
+}
+
+/* ---------- 行编辑 ---------- */
+function startEdit(i){
+  if(!hasFile()) return;
+  editingLine=i;
+  renderCode();
+}
+function commitEdit(i, insertAfter, deleteInstead){
+  if(editingLine!==i) return;
+  const f=files()[cur];
+  const row=codeEl.querySelector('.line[data-i="'+i+'"]');
+  const src=row?row.querySelector('.src'):null;
+  const text=src?src.innerText.replace(/\n$/,'').replace(/\u00a0/g,''):f.lines[i];
+  editingLine=-1;
+
+  if(deleteInstead){
+    f.lines.splice(i,1);
+    if(!f.lines.length) f.lines=[''];
+    shiftNotes(i+1,-1,true);
+    saveAll(); renderCode();
+    startEdit(Math.max(0,i-1));
+    return;
+  }
+
+  f.lines[i]=text;
+  if(insertAfter){
+    f.lines.splice(i+1,0,'');
+    shiftNotes(i+2,1,false);
+    saveAll(); renderCode(); startEdit(i+1);
+  }else{
+    saveAll(); renderCode();
+  }
+}
+function cancelEdit(){
+  editingLine=-1;
+  renderCode();
+}
+/* 行号偏移：插入/删除时同步移动笔记锚点 */
+function shiftNotes(fromLine, delta, isDelete){
+  const nm=NOTES[nkey()];
+  if(!nm) return;
+  const out={};
+  Object.keys(nm).forEach(k=>{
+    const n=+k;
+    if(isDelete){
+      if(n===fromLine) return;               // 被删那行的笔记丢弃
+      out[n>fromLine?n-1:n]=nm[k];
+    }else{
+      out[n>=fromLine?n+delta:n]=nm[k];
+    }
+  });
+  NOTES[nkey()]=out;
+}
+
+/* 双击空白处进入编辑：点行号或代码区 */
+codeEl.addEventListener('dblclick', e=>{
+  const row=e.target.closest('.line');
+  if(!row) return;
+  if(e.target.closest('.nb')) return;
+  const i=+row.dataset.i;
+  if(editingLine===i) return;
+  startEdit(i);
+});
+codeEl.addEventListener('contextmenu', e=>{
+  const row=e.target.closest('.line');
+  const inNote=e.target.closest('.nb');
+  if(inNote) return;
+
+  const sel=(getSelection()?getSelection().toString():'').trim()||selSnap;
+  const name=sel.split(/[\s(.:,;]+/).filter(Boolean).pop()||'';
+  const f=hasFile()?files()[cur]:null;
+  const exists=name&&f&&findEntry(f.lang,name);
+  const idx=row?+row.dataset.i:-1;
+
+  e.preventDefault();
+  const items=[];
+  if(sel) items.push({text:'选中：'+name});
+  items.push({label:exists?'编辑「'+name+'」':'加入函数库…', disabled:!name,
+              onClick:()=>openLibDialog(name,exists)});
+  items.push({label:'在函数库里查找', disabled:!name, onClick:()=>{
+    showView('lib'); document.getElementById('fnSearch').value=name; fnQuery=name; renderFnList();
+  }});
+  items.push({sep:true});
+  if(idx>=0){
+    items.push({label:'写笔记', onClick:()=>addNote(idx+1)});
+    items.push({label:'编辑这一行', onClick:()=>startEdit(idx)});
+    items.push({label:'在下方插入一行', onClick:()=>{ files()[cur].lines.splice(idx+1,0,'');
+      shiftNotes(idx+2,1,false); saveAll(); renderCode(); startEdit(idx+1); }});
+    items.push({label:'删除这一行', danger:true, onClick:()=>{
+      const f2=files()[cur];
+      if(f2.lines.length<=1){ f2.lines[0]=''; }
+      else{
+        f2.lines.splice(idx,1);
+        const nm=NOTES[nkey()];
+        if(nm&&nm[idx+1]!==undefined){ delete nm[idx+1]; }
+        shiftNotes(idx+1,-1,true);
+      }
+      saveAll(); renderCode();
+    }});
+  }
+  showMenu(e.clientX, e.clientY, items);
+});
+let selSnap='';
+codeEl.addEventListener('mousedown', e=>{
+  if(e.button===2) selSnap=(getSelection()?getSelection().toString():'').trim();
+}, true);
+
+/* ============================================================
+   悬停卡片
+   ============================================================ */
+const tip=document.getElementById('tip');
+let tipTimer=null;
+function hideTip(){ tip.style.display='none'; }
+
+codeEl.addEventListener('mouseover', e=>{
+  const el=e.target.closest('.fx'); if(!el||editingLine>=0) return;
+  clearTimeout(tipTimer); showTip(el.dataset.name, el);
+});
+codeEl.addEventListener('mouseout', e=>{
+  const el=e.target.closest('.fx'); if(!el) return;
+  tipTimer=setTimeout(hideTip,180);
+});
+function showTip(name, el){
+  if(!hasFile()) return;
+  const f=files()[cur], en=findEntry(f.lang,name);
+  if(!en) return;
+  const local=countUses(f.lang,name,curProj), glob=countUses(f.lang,name,null);
+  const cf=conflictOf(f.lang,name);
+  tip.innerHTML='<div class="th"><span class="nm">'+esc(en.name)+'</span>'+
+    '<span class="lg">'+LANGS[f.lang]+'</span></div>'+
+    (en.sig?'<div class="sg">'+esc(en.sig)+'</div>':'')+
+    '<div class="ds">'+esc(en.desc||'（还没有写描述）')+'</div>'+
+    ((en.tags&&en.tags.length)?'<div class="tg">'+en.tags.map(t=>'<span>'+esc(t)+'</span>').join('')+'</div>':'')+
+    (cf?'<div class="warn">⚠ 本工程另有一个同名定义：<b>'+esc(cf.file)+':'+cf.line+'</b>。</div>':'')+
+    '<div class="meta">本工程 '+local.n+' 次 · 全部 '+glob.n+' 次 / '+glob.projs.length+' 个工程</div>';
+  tip.style.display='block';
+  const r=el.getBoundingClientRect(), w=340, hh=tip.offsetHeight;
+  let x=Math.max(12,Math.min(r.left+r.width/2-w/2, innerWidth-w-12));
+  let y=r.bottom+8;
+  if(y+hh>innerHeight-12) y=r.top-hh-8;
+  tip.style.left=x+'px'; tip.style.top=Math.max(10,y)+'px';
+}
+tip.addEventListener('mouseenter',()=>clearTimeout(tipTimer));
+tip.addEventListener('mouseleave',()=>{ tipTimer=setTimeout(hideTip,140); });
+
+/* ============================================================
+   函数库条目对话框
+   ============================================================ */
+function openLibDialog(name, exists, langOverride){
+  const lg = langOverride || (hasFile()?files()[cur].lang:'perl');
+  const en = exists || {};
+  const localDef = defsOf(lg,name).find(d=>d.proj===curProj);
+  openModal({
+    title: exists?'编辑函数库条目':'加入函数库',
+    sub: exists
+      ? '这条在全局 '+LANGS[lg]+' 库里，修改会同步到所有工程的该语言文件。'
+      : '保存后写入<strong>全局函数库</strong>：所有 '+LANGS[lg]+' 工程的文件里，这个词都会变成可悬停的蓝词。',
+    body:
+      '<div class="fld"><label>函数名</label><input id="mName" value="'+esc(name||'')+'"></div>'+
+      '<div class="fld"><label>签名 / 用法</label><input id="mSig" value="'+esc(en.sig||'')+'"></div>'+
+      '<div class="fld"><label>我的描述</label><textarea id="mDesc">'+esc(en.desc||'')+'</textarea></div>'+
+      '<div class="fld"><label>标签（逗号分隔）</label><input id="mTags" value="'+esc((en.tags||[]).join(', '))+'"></div>'+
+      '<span class="scope">全局 · 所有 '+LANGS[lg]+' 工程 · '+EXT[lg]+'</span>'+
+      (localDef?'<div style="font-size:10.5px;color:var(--dim);margin-top:7px">笔记将绑定到本工程的定义：'+esc(localDef.file)+':'+localDef.line+'</div>':''),
+    okText: exists?'保存修改':'保存到函数库',
+    onOk(){
+      const nm=document.getElementById('mName').value.trim();
+      if(!nm){ toast('函数名不能为空'); return false; }
+      const sig=document.getElementById('mSig').value.trim();
+      const desc=document.getElementById('mDesc').value.trim();
+      const tags=document.getElementById('mTags').value.split(',').map(s=>s.trim()).filter(Boolean);
+      LIB[lg]=LIB[lg]||[];
+      const old=findEntry(lg,nm);
+      const origin=localDef?{proj:localDef.proj,file:localDef.file,line:localDef.line}:(old?old.origin:null);
+      if(old) Object.assign(old,{name:nm,sig,desc,tags,origin});
+      else LIB[lg].push({name:nm,sig,desc,tags,origin});
+      saveAll(); renderNav(); renderCode(); renderLib();
+      toast(exists?'已更新「'+nm+'」':'已加入函数库：'+nm);
+      return true;
+    }
+  });
+}
+
+/* 新建条目（手动） */
+document.getElementById('btnNewEntry').onclick=()=>{
+  openLibDialog('', null, libFilter==='all'?'perl':libFilter);
+};
+
+/* ============================================================
+   函数库视图
+   ============================================================ */
+function renderLib(){
+  const seg=document.getElementById('seg');
+  seg.replaceChildren();
+  const counts={all:0};
+  Object.keys(LANGS).forEach(l=>{counts[l]=(LIB[l]||[]).length;counts.all+=counts[l];});
+  [['all','全部'],['perl','Perl'],['python','Python'],['verilog','Verilog']].forEach(([k,label])=>{
+    const b=document.createElement('button');
+    b.className=libFilter===k?'on':'';
+    b.textContent=label+' '+counts[k];
+    b.onclick=()=>{ libFilter=k; renderLib(); };
+    seg.appendChild(b);
+  });
+
+  const body=document.getElementById('libBody');
+  body.replaceChildren();
+  const langs=libFilter==='all'?Object.keys(LANGS):[libFilter];
+  const flat=[];
+  langs.forEach(lg=>(LIB[lg]||[]).forEach(en=>flat.push({lg,en})));
+
+  if(!flat.length){
+    body.innerHTML='<div class="empty">还没有条目。选中代码里的函数名右键加入，或点上方「＋ 新建条目」。</div>';
+    return;
+  }
+
+  const grid=document.createElement('div');
+  grid.className='fgrid';
+  flat.forEach(({lg,en})=>{
+      const u=countUses(lg,en.name,null), defs=defsOf(lg,en.name);
+      const conflicted=defs.length>1;
+      const c=document.createElement('div');
+      c.className='fcard'+(conflicted?' warn':'');
+      c.title=en.name+(en.sig?'  '+en.sig:'')+'\n\n'+(en.desc||'（还没有写描述）');
+      c.innerHTML='<div class="ed"><button class="edit">编辑</button>'+
+        '<button class="del">删除</button></div>'+
+        '<div class="n"><span class="lgd">'+LGB[lg]+'</span><span class="nm">'+esc(en.name)+'</span></div>'+
+        (en.sig?'<div class="s">'+esc(en.sig)+'</div>':'<div class="s" style="opacity:.45">无签名</div>')+
+        '<div class="d">'+esc(en.desc||'（还没有写描述）')+'</div>'+
+        '<div class="f"><span class="cnt">'+u.n+' 次</span><span class="cnt">'+u.projs.length+' 工程</span>'+
+          (conflicted?'<span class="warnchip" title="同名多定义">⚠ '+defs.length+'</span>':'')+
+          (en.tags||[]).slice(0,2).map(t=>'<span class="tg">#'+esc(t)+'</span>').join('')+
+        '</div>';
+      c.querySelector('.edit').onclick=()=>{
+        if(u.files[0]){ const [pk,fk]=u.files[0].split('::'); curProj=pk; cur=fk;
+          saveAll(); renderProj(); renderNav(); }
+        openLibDialog(en.name,en,lg);
+      };
+      c.querySelector('.del').onclick=()=>{
+        openModal({title:'删除条目 '+en.name,
+          body:'<div class="warnbox">只删笔记，不影响任何代码。</div>',
+          okText:'删除', okClass:'dang',
+          onOk(){ LIB[lg]=LIB[lg].filter(x=>x!==en); saveAll(); renderNav(); renderLib(); renderCode();
+            toast('已删除'); return true; }});
+      };
+      c.querySelectorAll('.w').forEach(w=>w.onclick=()=>{
+        curProj=w.dataset.p;
+        const first=Object.keys(PROJECTS[curProj].files).find(k=>PROJECTS[curProj].files[k].lang===lg);
+        if(!first){ toast('这个工程里没有该语言的文件'); return; }
+        cur=first; activeLang=lg; saveAll(); renderProj(); renderNav(); renderCode(); showView('code');
+        flash(en.name);
+      });
+      grid.appendChild(c);
+  });
+  body.appendChild(grid);
+}
+
+/* ============================================================
+   导入导出 / 重置 / 快捷键
+   ============================================================ */
+document.getElementById('btnExport').onclick=()=>{
+  const payload={format:'ic-notes-fnlib',version:1,exportedAt:new Date().toISOString(),
+                 entries:LIB,
+                 projects: usingCustomData?PROJECTS:undefined};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='ic-notes-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast('已导出');
+};
+document.getElementById('btnImport').onclick=()=>document.getElementById('fileIn').click();
+document.getElementById('fileIn').addEventListener('change', ev=>{
+  const file=ev.target.files[0]; if(!file) return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const data=JSON.parse(rd.result);
+      let added=0, updated=0;
+      const src=data.entries||{};
+      Object.entries(src).forEach(([lang,arr])=>{
+        if(!Array.isArray(arr)) return;
+        LIB[lang]=LIB[lang]||[];
+        arr.forEach(en=>{
+          if(!en||!en.name) return;
+          const old=LIB[lang].find(x=>x.name===en.name);
+          if(old){ Object.assign(old,en); updated++; } else { LIB[lang].push(en); added++; }
+        });
+      });
+      if(data.projects){ Object.keys(PROJECTS).forEach(k=>delete PROJECTS[k]);
+        Object.assign(PROJECTS,data.projects); usingCustomData=true;
+        curProj=Object.keys(PROJECTS)[0];
+        const ks=Object.keys(PROJECTS[curProj].files); cur=ks[0]||null; }
+      saveAll(); renderProj(); renderNav(); renderCode(); renderLib();
+      toast('导入完成：新增 '+added+' 条，更新 '+updated+' 条');
+    }catch(err){ toast('导入失败：不是合法 JSON'); }
+    ev.target.value='';
+  };
+  rd.readAsText(file);
+});
+
+document.getElementById('btnReset').onclick=()=>{
+  openModal({
+    title:'重置所有数据',
+    sub:'清掉本地保存的工程、笔记、函数库，回到初始示例。',
+    body:'<div class="warnbox">不可撤销。建议先导出备份。</div>',
+    okText:'重置', okClass:'dang',
+    onOk(){ Object.keys(LS).forEach(k=>localStorage.removeItem(LS[k]));
+      location.reload(); return true; }
+  });
+};
+
+document.getElementById('btnHelp').onclick=()=>{
+  openModal({
+    title:'快捷键与操作',
+    body:'<div style="font-size:12.5px;line-height:2.1;color:var(--tx2)">'+
+      '<b style="color:var(--amber)">阅读</b><br>'+
+      '双击代码行 → 编辑<br>'+
+      '编辑中 Enter → 换行提交并新建下一行<br>'+
+      '编辑中 Esc → 取消；空行 Backspace → 删除该行<br>'+
+      '右键代码 → 加入函数库 / 写笔记 / 插入行 / 删行<br>'+
+      '选中函数名右键 → 加入函数库<br>'+
+      '<br><b style="color:var(--amber)">笔记</b><br>'+
+      '悬停行右侧 → ＋ 写笔记<br>'+
+      '笔记内 Ctrl+Enter → 完成；Esc → 退出<br>'+
+      '清空内容会自动删除这条笔记<br>'+
+      '<br><b style="color:var(--amber)">函数库</b><br>'+
+      '悬停蓝词 → 看描述；Ctrl 点名字不行，右键可编辑<br>'+
+      '左上 ×N 表示出现在 N 个工程'+
+      '</div>',
+    okText:'知道了', cancelText:'关闭'
+  });
+};
+
+/* ============================================================
+   视图切换
+   ============================================================ */
+function showView(v){
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  document.querySelectorAll('.view').forEach(s=>{
+    const on=s.id==='v-'+v; s.classList.toggle('on',on); if(on) s.scrollTop=0;
+  });
+  if(v==='lib') renderLib();
+}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>showView(b.dataset.v));
+
+document.getElementById('btnAll').onclick=()=>{ activeLang='all'; renderNav(); };
+document.getElementById('fnSearch').addEventListener('input',e=>{ fnQuery=e.target.value; renderFnList(); });
+
+document.addEventListener('keydown', e=>{
+  if(editingLine>=0) return;
+  if((e.ctrlKey||e.metaKey) && e.key==='s'){ e.preventDefault(); saveAll(); toast('已保存'); }
+});
+
+/* init */
+renderProj(); renderNav(); renderCode(); renderLib();
+</script>
+</body>
+</html>

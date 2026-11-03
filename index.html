@@ -384,6 +384,8 @@
   </div>
   <div class="sp"></div>
   <div class="saved" id="saved"><i></i><span id="savedText">已保存</span></div>
+  <button class="iconbtn" id="btnUndo" title="撤销 Ctrl+Z">↶</button>
+  <button class="iconbtn" id="btnRedo" title="重做 Ctrl+Shift+Z">↷</button>
   <button class="iconbtn" id="btnHelp">快捷键</button>
   <button class="iconbtn" id="btnReset">重置数据</button>
 </div>
@@ -823,6 +825,7 @@ function reextractCurrent(){
 
   if(!res.comments.length){ toast('这个文件里没有可摘出的注释'); return; }
 
+  snapshot('摘注释 '+res.comments.length+' 处');
   const newLines=res.code.length?res.code:[''];
   const newNotes={};
 
@@ -1598,7 +1601,7 @@ function buildNoteCard(no, entry){
     });
     const del=document.createElement('button');
     del.className='cdel'; del.textContent='×';
-    del.onclick=()=>{ delete NOTES[nkey()][from]; saveAll(); renderCode(); };
+    del.onclick=()=>{ snapshot('删除第 '+no+' 行注释'); delete NOTES[nkey()][from]; saveAll(); renderCode(); };
     nb.append(t,del);
     return nb;
   }
@@ -1635,7 +1638,7 @@ function buildNoteCard(no, entry){
   tools.className='tools';
   const st=document.createElement('span'); st.className='st'; st.textContent='自动保存';
   const del=document.createElement('button'); del.textContent='删除';
-  del.onclick=()=>{ delete NOTES[nkey()][from]; saveAll(); renderCode(); };
+  del.onclick=()=>{ snapshot('删除第 '+no+' 行笔记'); delete NOTES[nkey()][from]; saveAll(); renderCode(); };
   tools.append(st,del);
   h.appendChild(tools);
 
@@ -1665,6 +1668,7 @@ function buildNoteCard(no, entry){
 }
 
 function addNote(no){
+  snapshot('新增第 '+no+' 行笔记');
   NOTES[nkey()]=NOTES[nkey()]||{};
   NOTES[nkey()][no]={text:'', fp:hashLine(files()[cur].lines[no-1] || ''), kind:'note'};
   saveAll(); renderCode();
@@ -1688,6 +1692,13 @@ function commitEdit(i, insertAfter, deleteInstead, newText){
   /* 改动前先记下这一行上挂着哪些笔记，改完把它们的指纹更新成新内容 */
   const beforeMap=resolveNotes(nkey(), f.lines);
   const touched=(beforeMap.byLine[i+1]||[]).map(e=>e.note);
+
+  const changed = (text !== f.lines[i]);
+  if(deleteInstead || insertAfter || changed){
+    snapshot(deleteInstead ? '删除第 '+(i+1)+' 行'
+           : insertAfter ? '在第 '+(i+1)+' 行后插入'
+           : '编辑第 '+(i+1)+' 行');
+  }
 
   if(deleteInstead){
     f.lines.splice(i,1);
@@ -1718,6 +1729,7 @@ function pasteBlock(i, parts){
   const f=files()[cur];
   const curText=(f.lines[i]||'');
   const atEmpty=!curText.trim();
+  snapshot('粘贴 '+parts.length+' 行');
   editingLine=-1;
 
   if(atEmpty){
@@ -1853,9 +1865,11 @@ codeEl.addEventListener('contextmenu', e=>{
   if(idx>=0){
     items.push({label:'写笔记', onClick:()=>addNote(idx+1)});
     items.push({label:'编辑这一行', onClick:()=>startEdit(idx)});
-    items.push({label:'在下方插入一行', onClick:()=>{ files()[cur].lines.splice(idx+1,0,'');
+    items.push({label:'在下方插入一行', onClick:()=>{ snapshot('插入一行');
+      files()[cur].lines.splice(idx+1,0,'');
       shiftNotes(idx+2,1,false); saveAll(); renderCode(); startEdit(idx+1); }});
     items.push({label:'删除这一行', danger:true, onClick:()=>{
+      snapshot('删除第 '+(idx+1)+' 行');
       const f2=files()[cur];
       if(f2.lines.length<=1){ f2.lines[0]=''; }
       else{
@@ -2088,6 +2102,7 @@ document.getElementById('btnHelp').onclick=()=>{
       'Tab → 插入 4 空格缩进<br>'+
       '粘贴一大段代码 → 自动按行拆开，不会挤成一行<br>'+
       '空行按 Backspace → 删掉这一行；Esc → 取消本次编辑<br>'+
+      'Ctrl+Z / Ctrl+Shift+Z → 撤销 / 重做最近 60 步<br>'+
       '<b style="color:var(--amber)">看结构</b><br>'+
       '双击括号 → 高亮配对的另一只括号，标出它圈住的行范围<br>'+
       '拖动代码与笔记之间的竖线 → 调整两边宽度（会记住）<br>'+
@@ -2165,6 +2180,76 @@ try{
   const saved=parseInt(localStorage.getItem('icn-notew')||'0',10);
   if(saved>0) setNoteW(saved, false);
 }catch(e){}
+
+/* ============================================================
+   撤销 / 重做
+   每次改动代码或笔记之前拍一张快照，Ctrl+Z 回到上一张。
+   ============================================================ */
+const HIST={undo:[],redo:[],limit:60};
+
+function takeSnap(label){
+  if(!hasFile()) return null;
+  return {proj:curProj, file:cur,
+          lines:(PROJECTS[curProj].files[cur].lines||[]).slice(),
+          notes:JSON.parse(JSON.stringify(NOTES[nkey()]||{})),
+          label};
+}
+function snapshot(label){
+  const s=takeSnap(label);
+  if(!s) return;
+  HIST.undo.push(s);
+  if(HIST.undo.length>HIST.limit) HIST.undo.shift();
+  HIST.redo.length=0;
+  updateHistBtns();
+}
+function applySnap(s){
+  if(!s || !PROJECTS[s.proj] || !PROJECTS[s.proj].files[s.file]) return false;
+  curProj=s.proj; cur=s.file;
+  PROJECTS[s.proj].files[s.file].lines=s.lines.slice();
+  NOTES[s.proj+'::'+s.file]=JSON.parse(JSON.stringify(s.notes));
+  activeLang=PROJECTS[s.proj].files[s.file].lang;
+  editingLine=-1;
+  saveAll(); renderProj(); renderNav(); renderCode();
+  return true;
+}
+function doUndo(){
+  if(!HIST.undo.length){ toast('没有可撤销的操作'); return; }
+  const prev=HIST.undo.pop();
+  const now=takeSnap(prev.label);
+  if(applySnap(prev)){
+    if(now) HIST.redo.push(now);
+    toast('已撤销：'+prev.label);
+  }else{
+    HIST.undo.push(prev);
+    toast('原文件已经不存在了，撤销不了');
+  }
+  updateHistBtns();
+}
+function doRedo(){
+  if(!HIST.redo.length){ toast('没有可重做的操作'); return; }
+  const next=HIST.redo.pop();
+  const now=takeSnap(next.label);
+  if(applySnap(next)){
+    if(now) HIST.undo.push(now);
+    toast('已重做：'+next.label);
+  }
+  updateHistBtns();
+}
+function updateHistBtns(){
+  const u=document.getElementById('btnUndo'), r=document.getElementById('btnRedo');
+  if(u) u.style.opacity=HIST.undo.length?'1':'.3';
+  if(r) r.style.opacity=HIST.redo.length?'1':'.3';
+}
+document.getElementById('btnUndo').onclick=doUndo;
+document.getElementById('btnRedo').onclick=doRedo;
+document.addEventListener('keydown',e=>{
+  const ae=document.activeElement;
+  const typing = ae && (ae.isContentEditable || ae.tagName==='INPUT' || ae.tagName==='TEXTAREA');
+  if(!(e.ctrlKey||e.metaKey) || typing) return;
+  const k=e.key.toLowerCase();
+  if(k==='z'){ e.preventDefault(); e.shiftKey?doRedo():doUndo(); }
+  else if(k==='y'){ e.preventDefault(); doRedo(); }
+});
 
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();

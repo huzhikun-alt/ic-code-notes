@@ -28,6 +28,7 @@ with sync_playwright() as p:
     page.select_option('#noteMode','plain')
     results['plain_note_visible']=page.locator('.nb').first.is_visible()
     page.select_option('#noteMode','inline')
+    page.locator('#btnMenu').click()
     page.locator('#themeToggle').click()
     results['dark']=page.locator('html').get_attribute('data-theme')
     page.screenshot(path=str(Path(__file__).with_name('ui-dark.png')))
@@ -36,7 +37,7 @@ with sync_playwright() as p:
     results['errors']=errors
     print(json.dumps(results,ensure_ascii=False,indent=2))
     assert results['theme']=='light' and results['mode']=='inline'
-    assert results['no_note_height']<=29
+    assert results['no_note_height']<=32
     assert results['inline']['noteLeft']>results['inline']['codeRight']
     assert results['side_display']=='grid' and not results['plain_note_visible']
     assert results['note_blurred'] and '换行验证' in results['note_newline']

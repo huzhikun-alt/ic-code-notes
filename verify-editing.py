@@ -40,6 +40,7 @@ with sync_playwright() as p:
     assert page.locator('.line').count() == 4, page.locator('.line').count()
 
     # 4. 摘注释 → 剩 2 行、2 张注释卡、字符串里的 # 保留
+    page.locator('#btnMenu').click()
     page.locator('#btnExtract').click()
     page.wait_for_timeout(300)
     assert page.locator('.line').count() == 2

@@ -385,11 +385,18 @@
   </div>
   <div class="sp"></div>
   <div class="saved" id="saved"><i></i><span id="savedText">已保存</span></div>
-  <button class="iconbtn" id="btnUndo" title="撤销 Ctrl+Z">↶</button>
-  <button class="iconbtn" id="btnRedo" title="重做 Ctrl+Shift+Z">↷</button>
-  <button class="iconbtn" id="themeToggle">☾ 深色</button>
-  <button class="iconbtn" id="btnHelp">快捷键</button>
-  <button class="iconbtn" id="btnReset">重置数据</button>
+  <button class="iconbtn menu-btn" id="btnMenu" aria-haspopup="menu" aria-expanded="false" title="更多操作">⋯</button>
+  <div class="appmenu" id="appMenu" role="menu">
+    <button role="menuitem" id="btnUndo">撤销<kbd>Ctrl Z</kbd></button>
+    <button role="menuitem" id="btnRedo">重做<kbd>Ctrl ⇧ Z</kbd></button>
+    <button role="menuitem" id="btnExtract">摘出本文件注释</button>
+    <div class="sep"></div>
+    <button role="menuitem" id="btnLost" hidden>未定位的笔记</button>
+    <button role="menuitem" id="themeToggle">切换主题</button>
+    <button role="menuitem" id="btnHelp">快捷键</button>
+    <div class="sep"></div>
+    <button role="menuitem" id="btnReset" class="dang">重置数据</button>
+  </div>
 </div>
 
 <div class="shell">
@@ -441,7 +448,6 @@
         <span class="lgb" id="flang"></span>
         <span class="m" id="fmeta"></span>
         <select id="noteMode" class="mode-picker" aria-label="批注显示模式"><option value="inline">行末批注</option><option value="side">右侧对齐</option><option value="plain">纯代码</option></select>
-        <button class="editbtn" id="btnExtract" title="把当前文件里的注释摘到右侧">摘注释</button>
       </div>
       <div class="code" id="code"></div>
       <div class="splitter" id="splitter" title="左右拖动调整笔记列宽度"></div>
@@ -1453,8 +1459,7 @@ function renderCode(){
   const res=resolveNotes(nkey(), f.lines);
 
   document.getElementById('fmeta').textContent =
-    f.lines.length+' 行 · '+Object.keys(notes).length+' 条笔记'+
-    (res.lost.length?' · '+res.lost.length+' 条未定位':'');
+    f.lines.length+' 行 · '+Object.keys(notes).length+' 条批注';
 
   f.lines.forEach((line,i)=>{
     const no=i+1, list=res.byLine[no]||[], has=list.length>0;
@@ -1556,49 +1561,57 @@ function renderCode(){
 }
 
 /* 未定位的笔记：代码删了 / 指纹对不上 */
+let lostNotes=[];
 function renderLost(lost){
+  lostNotes = lost || [];
   const old=document.getElementById('lostbox');
   if(old) old.remove();
-  if(!lost || !lost.length) return;
+  const item=document.getElementById('btnLost');
+  if(item){
+    item.hidden = !lostNotes.length;
+    item.textContent = '未定位的笔记 (' + lostNotes.length + ')';
+  }
+}
 
-  const box=document.createElement('div');
-  box.id='lostbox';
-  box.className='lostbox';
-  box.innerHTML='<div class="lh">未定位的笔记 <span>'+lost.length+'</span>'+
-    '<i>这些笔记锚定的代码行找不到了，选一个新行号重新绑定，或者删掉。</i></div>';
+/* 未定位的笔记改到弹窗里处理，不再占用正文空间 */
+function openLostDialog(){
+  if(!lostNotes.length){ toast('没有未定位的笔记'); return; }
+  const body = lostNotes.map(({note,from},i)=>
+    '<div class="lostrow" data-i="'+i+'">'+
+      '<div class="ltx">'+esc(note.text||'（空笔记）')+'</div>'+
+      '<div class="lmeta"><span>原第 '+Math.abs(from)+' 行</span>'+
+      '<input type="number" min="1" placeholder="新行号" data-role="ln">'+
+      '<button data-role="bind">绑定</button>'+
+      '<button data-role="del">删除</button></div>'+
+    '</div>').join('');
 
-  lost.forEach(({note, from})=>{
-    const c=document.createElement('div');
-    c.className='lcard';
-    const body=document.createElement('div');
-    body.className='ltx'; body.textContent=note.text || '（空笔记）';
-    const meta=document.createElement('div');
-    meta.className='lmeta';
-    meta.innerHTML='<span>原第 '+Math.abs(from)+' 行</span>';
-    const inp=document.createElement('input');
-    inp.type='number'; inp.min='1'; inp.placeholder='行号';
-    inp.style.width='64px';
-    const bind=document.createElement('button');
-    bind.textContent='绑定';
-    bind.onclick=()=>{
-      const n=parseInt(inp.value,10);
+  openModal({
+    title:'未定位的笔记',
+    sub:'这些笔记原本挂着的代码行已经找不到了。可以指定一个行号重新绑定，或者直接删掉。',
+    body:'<div class="lostlist">'+body+'</div>',
+    okText:'完成', cancelText:'关闭'
+  });
+
+  document.querySelectorAll('.lostrow').forEach(row=>{
+    const i=+row.dataset.i;
+    const {note,from}=lostNotes[i];
+    row.querySelector('[data-role="bind"]').onclick=()=>{
+      const n=parseInt(row.querySelector('[data-role="ln"]').value,10);
       const lines=files()[cur].lines;
       if(!n || n<1 || n>lines.length){ toast('行号超出范围'); return; }
       const m=NOTES[nkey()];
-      let moved=null;
-      Object.keys(m).forEach(k=>{ if(m[k]===note && +k===from){ moved=m[k]; delete m[k]; } });
-      if(moved){ m[n]=moved; } else { m[n]=note; Object.keys(m).forEach(k=>{ if(k===String(from)) delete m[k]; }); }
+      const v=m[from];
+      delete m[from];
+      if(m[n]) m[n].text=(m[n].text||'')+'\n\n'+(v.text||'');
+      else m[n]=v;
       m[n].fp=hashLine(lines[n-1]);
-      saveAll(); renderCode(); toast('已绑定到第 '+n+' 行');
+      closeModal(); saveAll(); renderCode(); toast('已绑定到第 '+n+' 行');
     };
-    const del=document.createElement('button');
-    del.textContent='删除';
-    del.onclick=()=>{ delete NOTES[nkey()][from]; saveAll(); renderCode(); };
-    meta.append(inp, bind, del);
-    c.append(body, meta);
-    box.appendChild(c);
+    row.querySelector('[data-role="del"]').onclick=()=>{
+      delete NOTES[nkey()][from];
+      row.remove(); saveAll(); renderCode(); toast('已删除');
+    };
   });
-  codeEl.appendChild(box);
 }
 
 function buildNoteCard(no, entry){
@@ -1925,6 +1938,7 @@ codeEl.addEventListener('mouseover', e=>{
 });
 codeEl.addEventListener('mouseout', e=>{
   const el=e.target.closest('.fx'); if(!el) return;
+  if(tip.contains(document.activeElement)) return;   // 正在卡片里编辑，先别收
   tipTimer=setTimeout(hideTip,180);
 });
 function showTip(name, el){
@@ -1933,22 +1947,46 @@ function showTip(name, el){
   if(!en) return;
   const local=countUses(f.lang,name,curProj), glob=countUses(f.lang,name,null);
   const cf=conflictOf(f.lang,name);
+
   tip.innerHTML='<div class="th"><span class="nm">'+esc(en.name)+'</span>'+
-    '<span class="lg">'+LANGS[f.lang]+'</span></div>'+
-    (en.sig?'<div class="sg">'+esc(en.sig)+'</div>':'')+
-    '<div class="ds">'+esc(en.desc||'（还没有写描述）')+'</div>'+
+      '<span class="lg">'+LANGS[f.lang]+'</span>'+
+      '<span class="editflag">可直接编辑</span></div>'+
+    '<div class="sg" contenteditable="true" spellcheck="false" data-role="sig" '+
+      'data-ph="点击填写签名">'+esc(en.sig||'')+'</div>'+
+    '<div class="ds" contenteditable="true" spellcheck="false" data-role="desc" '+
+      'data-ph="点击填写描述">'+esc(en.desc||'')+'</div>'+
     ((en.tags&&en.tags.length)?'<div class="tg">'+en.tags.map(t=>'<span>'+esc(t)+'</span>').join('')+'</div>':'')+
     (cf?'<div class="warn">⚠ 本工程另有一个同名定义：<b>'+esc(cf.file)+':'+cf.line+'</b>。</div>':'')+
     '<div class="meta">本工程 '+local.n+' 次 · 全部 '+glob.n+' 次 / '+glob.projs.length+' 个工程</div>';
+
+  /* 在这里改的内容直接写回函数库 */
+  tip.querySelectorAll('[contenteditable]').forEach(node=>{
+    node.addEventListener('blur',()=>{
+      const value=node.innerText.replace(/\u00a0/g,'').trim();
+      if(node.dataset.role==='desc'){ en.desc=value; }
+      else { en.sig=value; }
+      saveAll(); renderFnList();
+      node.dataset.filled = value ? '1' : '';
+    });
+    node.addEventListener('keydown',ev=>{
+      if(ev.key==='Enter'&&!ev.shiftKey){ ev.preventDefault(); node.blur(); }
+      if(ev.key==='Escape'){ node.blur(); }
+    });
+    if(node.innerText.trim()) node.dataset.filled='1';
+  });
+
   tip.style.display='block';
-  const r=el.getBoundingClientRect(), w=340, hh=tip.offsetHeight;
+  const r=el.getBoundingClientRect(), w=352, hh=tip.offsetHeight;
   let x=Math.max(12,Math.min(r.left+r.width/2-w/2, innerWidth-w-12));
   let y=r.bottom+8;
   if(y+hh>innerHeight-12) y=r.top-hh-8;
   tip.style.left=x+'px'; tip.style.top=Math.max(10,y)+'px';
 }
 tip.addEventListener('mouseenter',()=>clearTimeout(tipTimer));
-tip.addEventListener('mouseleave',()=>{ tipTimer=setTimeout(hideTip,140); });
+tip.addEventListener('mouseleave',()=>{
+  if(tip.contains(document.activeElement)) return;
+  tipTimer=setTimeout(hideTip,140);
+});
 
 /* ============================================================
    函数库条目对话框

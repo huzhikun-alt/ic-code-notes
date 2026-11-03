@@ -905,8 +905,13 @@ function saveAll(){
     localStorage.setItem(LS.lib, JSON.stringify(LIB));
     localStorage.setItem(LS.notes, JSON.stringify(NOTES));
     localStorage.setItem(LS.proj, curProj);
-    if(usingCustomData) localStorage.setItem(LS.data, JSON.stringify({projects:PROJECTS}));
-  }catch(e){}
+    // Editing a built-in sample is still a real edit; persist it even before creating a file.
+    localStorage.setItem(LS.data, JSON.stringify({projects:PROJECTS}));
+  }catch(e){
+    document.getElementById('savedText').textContent='保存失败，请导出备份';
+    document.getElementById('saved').classList.remove('act');
+    return;
+  }
   markSaved();
 }
 let savedTimer=null;
@@ -1465,7 +1470,8 @@ function renderCode(){
     src.className='src'; src.dataset.i=i;
     if(i===editingLine){
       src.contentEditable='true';
-      src.textContent=line;
+      // 空行也要占一个行高，否则新文件的第一行看不见也点不到
+      src.textContent=line || '\u00a0';
     }else{
       let col=0;
       tokenize(line,f.lang).forEach(tk=>{

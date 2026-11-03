@@ -33,5 +33,16 @@ html[data-note-mode="plain"] .slot,html[data-note-mode="plain"] .lostbox{display
 [data-theme="light"] .tk-k{color:#8054ab}[data-theme="light"] .tk-s{color:#467a40}[data-theme="light"] .tk-n{color:#ab5b30}[data-theme="light"] .tk-c{color:#889497}[data-theme="light"] .tk-p{color:#40546b}[data-theme="light"] .br{color:#59758d}[data-theme="light"] .fx{color:#287890;background:#e8f3f7;border-color:#9cc8d5}[data-theme="light"] .fx.conflict{color:#ad4b65;background:#fbeef2}
 [data-theme="light"] .projmenu,[data-theme="light"] #menu,[data-theme="light"] #tip,[data-theme="light"] .dlg,[data-theme="light"] .editbar,[data-theme="light"] #toast{background:#fff;border-color:#d8e1ec;color:var(--ink);box-shadow:0 12px 36px #24334c18}
 [data-theme="light"] .pitem .t,[data-theme="light"] .projbtn .pn,[data-theme="light"] #menu button,[data-theme="light"] #tip .ds{color:var(--ink)}[data-theme="light"] .pitem:hover,[data-theme="light"] #menu button:hover{background:#f0f4f8;color:var(--ink)}[data-theme="light"] .fld input,[data-theme="light"] .fld textarea{background:#f9fafc;border-color:var(--edge);color:var(--ink)}[data-theme="light"] .btn{background:#f3f6f9;color:var(--ink);border-color:var(--edge)}[data-theme="light"] .btn.pri{background:#b77b27;color:#fff}[data-theme="light"] .lostbox{background:#fff5f6;border-color:#ebc9d2}[data-theme="light"] .lcard .ltx{color:#795360}[data-theme="light"] .lcard .lmeta input{background:white;color:var(--ink)}[data-theme="light"] #scope{background:#fff7e8;color:#8b611d;border-color:#e8d1a6}
+/* Lost-anchor controls: reset UA form styling so they match the surrounding UI. */
+.lostbox{border-radius:10px}
+.lcard .lmeta input,.lcard .lmeta button{appearance:none;-webkit-appearance:none;background:transparent;
+  border:1px solid var(--edge);border-radius:6px;color:var(--tx2);font:11px/1.4 var(--mono);
+  padding:4px 8px;height:26px;min-height:0}
+.lcard .lmeta input{width:70px;text-align:center}
+.lcard .lmeta input::-webkit-outer-spin-button,.lcard .lmeta input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.lcard .lmeta button{cursor:pointer}
+.lcard .lmeta button:hover{border-color:var(--line3);color:var(--tx)}
+[data-theme="light"] .lcard .lmeta input,[data-theme="light"] .lcard .lmeta button{background:#fff;color:#5b4450;border-color:#e3d3da}
+[data-theme="light"] .lcard .lmeta button:hover{background:#fdeff3;border-color:#d9b9c4;color:#8a3f56}
 @media(max-width:1100px){.nav{width:205px}.top{gap:9px;padding:0 14px}.chead{gap:6px;padding:0 16px}.chead .m{display:none}#btnReset{display:none}.line .src{font-size:12px}.mode-picker{max-width:116px}}
 @media(max-width:760px){.nav{width:170px}.top .saved,.top #btnHelp{display:none}.brand{font-size:12px}.tabs button{padding:7px 10px}.file{padding-left:18px}.chead .p{max-width:150px}html[data-note-mode="inline"] .line.an .cl{max-width:100%}html[data-note-mode="inline"] .line{flex-wrap:wrap;gap:2px}html[data-note-mode="inline"] .slot:has(.nb){margin-left:48px;max-width:calc(100% - 48px)}.lib{padding:18px}.top{gap:8px}}

@@ -27,8 +27,13 @@
 body{background:var(--bg);color:var(--ink);font-family:var(--sans);
      -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 button,input,select,textarea{font:inherit;color:inherit}
-button:focus-visible,select:focus-visible,input:focus-visible,[contenteditable]:focus-visible{
+button:focus-visible,select:focus-visible,input:focus-visible{
   outline:2px solid var(--teal);outline-offset:2px}
+/* 代码和批注是编辑面，不要画焦点框；靠光标本身表示状态 */
+.line .src:focus,.line .src:focus-visible,
+.nb .body:focus,.nb .body:focus-visible,
+.nb .ctext:focus,.nb .ctext:focus-visible{
+  outline:none!important;box-shadow:none!important;background:transparent!important}
 
 /* ---------------- top bar ---------------- */
 .top{position:relative;height:60px;padding:0 22px;gap:18px;background:var(--surface);

@@ -179,6 +179,17 @@
   .nb.moved .h .tag{color:var(--teal)}
   .nb.dup{border-left-color:var(--rose);background:#1a1015;border-color:#3d1f2b}
   .slot .nb + .nb{margin-top:7px}
+
+  /* 从源码里摘出来的注释：精简卡片，不显示分类标签 */
+  .nb.cmt{position:relative;background:#0f161d;border:1px solid #22303d;
+          border-left:2px solid #3f6280;border-radius:0 7px 7px 0;padding:8px 11px}
+  .nb.cmt .ctext{font-size:11.8px;line-height:1.72;color:#93a9be;white-space:pre-wrap;outline:none;
+                 min-height:18px}
+  .nb.cmt .ctext:focus{box-shadow:0 0 0 1px #2c4358;border-radius:3px}
+  .nb.cmt .cdel{position:absolute;top:6px;right:8px;font-size:10px;color:#5a7386;opacity:0;
+                transition:.15s}
+  .nb.cmt:hover .cdel{opacity:1}
+  .nb.cmt .cdel:hover{color:var(--rose)}
   .achip{font:9px var(--mono);color:var(--teal);background:rgba(79,208,191,.1);
          border:1px solid #21403c;border-radius:4px;padding:0 5px;cursor:help}
   .achip.bad{color:var(--rose);background:rgba(242,121,155,.1);border-color:#4a2532}
@@ -369,7 +380,10 @@
     </div>
 
     <div class="navscroll">
-      <div class="nlabel"><span id="navCount">文件</span><button id="btnNewFile" title="新建文件">＋</button></div>
+      <div class="nlabel"><span id="navCount">文件</span>
+        <button id="btnImportCode" title="粘贴代码，自动把注释摘到右侧">⇩</button>
+        <button id="btnNewFile" title="新建文件">＋</button>
+      </div>
       <div id="cats"></div>
 
       <div class="fnsect">
@@ -553,7 +567,8 @@ function seedNote(fileKey, lineNo, text, fpLine, fpOverride){
   NOTES[fileKey] = NOTES[fileKey] || {};
   NOTES[fileKey][lineNo] = {
     text,
-    fp: fpOverride || hashLine(lines[(fpLine||lineNo)-1] || '')
+    fp: fpOverride || hashLine(lines[(fpLine||lineNo)-1] || ''),
+    kind:'note'
   };
 }
 
@@ -608,6 +623,117 @@ function resolveNotes(fileKey, lines){
 }
 
 /* ============================================================
+   从源码里摘注释 → 右侧卡片
+   每种语言的注释符号不同；连续的整行注释合并成一组，挂到下一行代码上。
+   ============================================================ */
+const COMMENT_STYLE = {
+  perl:    {line:['#'],  block:[]},
+  python:  {line:['#'],  block:[]},
+  verilog: {line:['//'], block:[['/*','*/']]}
+};
+
+function detectLang(code){
+  if(/endmodule|^\s*module\s+\w+/m.test(code)) return 'verilog';
+  if(/^\s*def\s+\w+\s*\(/m.test(code) || /^\s*(import|from)\s+[\w.]+/m.test(code)) return 'python';
+  if(/use\s+strict|sub\s+\w+\s*\{|my\s+[$@%]|->\{/m.test(code)) return 'perl';
+  return 'perl';
+}
+
+/* 从代码里猜一个像样的文件名 */
+function suggestName(code, lang){
+  let m=null;
+  if(lang==='verilog') m=/module\s+(\w+)/.exec(code);
+  else if(lang==='python') m=/^\s*def\s+(\w+)/m.exec(code);
+  else m=/^\s*sub\s+(\w+)/m.exec(code);
+  return (m ? m[1] : 'pasted') + DEFEXT[lang];
+}
+
+const cleanBlock = s => s.split('\n')
+  .map(l => l.replace(/^\s*\*+\s?/, '').replace(/\s+$/,''))
+  .join('\n').trim();
+
+/* 逐行拆成 {code, cmt, only} */
+function extractComments(src, lang){
+  const cfg = COMMENT_STYLE[lang] || {line:['#'], block:[]};
+  const raw = src.replace(/\r\n?/g,'\n').split('\n');
+  const out = [];
+  let block = null;
+
+  for(const srcLine of raw){
+    /* shebang 是给解释器看的指令，不能当注释摘走 */
+    if(!block && /^\s*#!/.test(srcLine)){
+      out.push({code:srcLine.replace(/\s+$/,''), cmt:'', only:false});
+      continue;
+    }
+    let line = srcLine, cmt = '';
+    outer: while(true){
+      if(block){
+        const e = line.indexOf(block.end);
+        if(e >= 0){
+          block.buf.push(line.slice(0, e));
+          cmt += (cmt?'\n':'') + cleanBlock(block.buf.join('\n'));
+          line = line.slice(e + block.end.length);
+          block = null;
+          continue;
+        }
+        block.buf.push(line);
+        line = null;
+        break outer;
+      }
+      for(const [st,en] of (cfg.block||[])){
+        const i = line.indexOf(st);
+        if(i < 0) continue;
+        const j = line.indexOf(en, i + st.length);
+        if(j >= 0){
+          cmt += (cmt?'\n':'') + cleanBlock(line.slice(i+st.length, j));
+          line = line.slice(0,i) + line.slice(j+en.length);
+          continue outer;
+        }
+        block = {end:en, buf:[line.slice(i+st.length)]};
+        line = line.slice(0,i);
+        break outer;
+      }
+      break;
+    }
+    if(line !== null){
+      for(const m of (cfg.line||[])){
+        const i = line.indexOf(m);
+        if(i < 0) continue;
+        cmt += (cmt?'\n':'') + line.slice(i + m.length).trim();
+        line = line.slice(0,i);
+        break;
+      }
+    }
+    const text = (line===null?'':line).replace(/\s+$/,'');
+    out.push({code:text, cmt:cmt.trim(), only:(line===null)||(text.trim()===''&&!!cmt)});
+  }
+  return out;
+}
+
+/* 连续注释合成一组，挂到下一行代码；行尾注释挂本行 */
+function buildFromParsed(parsed){
+  const code=[], comments=[];
+  let pending=[];
+  parsed.forEach(p=>{
+    if(p.only){ if(p.cmt) pending.push(p.cmt); return; }
+    if(!p.code.trim() && !p.cmt){
+      if(pending.length) return;                 // 注释块与代码之间不留空行
+      if(code.length && code[code.length-1].trim()!=='') code.push('');
+      return;
+    }
+    code.push(p.code);
+    const ln = code.length;
+    if(pending.length){ comments.push({line:ln, text:pending.join('\n'), kind:'comment'}); pending=[]; }
+    if(p.cmt) comments.push({line:ln, text:p.cmt, kind:'comment'});
+  });
+  if(pending.length && code.length){
+    comments.push({line:code.length, text:pending.join('\n'), kind:'comment'});
+  }
+  while(code.length && code[code.length-1].trim()==='') code.pop();
+  return {code, comments};
+}
+
+/* ============================================================
    状态 + 存储
    ============================================================ */
 let curProj = 'uart_log_tools';
@@ -635,8 +761,9 @@ try{
     Object.keys(NOTES||{}).forEach(k=>{
       const m=NOTES[k]||{};
       Object.keys(m).forEach(ln=>{
-        if(typeof m[ln]==='string') m[ln]={text:m[ln], fp:null};
+        if(typeof m[ln]==='string') m[ln]={text:m[ln], fp:null, kind:'note'};
         else if(m[ln] && typeof m[ln]==='object' && m[ln].fp===undefined) m[ln].fp=null;
+        if(m[ln] && typeof m[ln]==='object' && !m[ln].kind) m[ln].kind='note';
       });
     });
   }
@@ -896,6 +1023,71 @@ function newFileDialog(){
 document.getElementById('btnNewFile').onclick = ()=>{
   if(!PROJECTS[curProj]) return;
   newFileDialog();
+};
+
+/* ---------- 粘贴代码 · 自动摘注释 ---------- */
+document.getElementById('btnImportCode').onclick = ()=>{
+  let lang='perl';
+  openModal({
+    title:'粘贴代码 · 自动摘注释',
+    sub:'注释会被移到右侧，左边只留代码。<strong>连续的整行注释会合并成一张卡片</strong>，贴在它所注释的那行代码旁边。',
+    body:
+      '<div class="fld"><label>文件名</label><input id="mName" placeholder="pasted_code.pl"></div>'+
+      '<div class="fld"><label>语言 <span style="color:#4f6076;font-size:10px">（自动识别，可改）</span></label>'+
+        '<div class="choices" id="mLang">'+
+          Object.keys(LANGS).map(l=>'<button data-l="'+l+'" class="'+(l===lang?'on':'')+'">'+
+            LANGS[l]+'</button>').join('')+
+        '</div></div>'+
+      '<div class="fld"><label>代码</label>'+
+        '<textarea id="mCode" style="min-height:250px;font-family:var(--mono);font-size:12px;'+
+        'line-height:1.6" placeholder="把 AI 生成或别处复制的代码整段粘进来…"></textarea></div>',
+    okText:'导入',
+    onOk(){
+      const src=document.getElementById('mCode').value;
+      if(!src.trim()){ toast('先粘贴一段代码'); return false; }
+      const f=files();
+      let name=document.getElementById('mName').value.trim();
+      if(!name) name=suggestName(src, lang);
+      if(!name.includes('.')) name+=DEFEXT[lang];
+      while(f[name]) name=name.replace(/(\.[^.]+)$/, '_'+Date.now().toString(36)+'$1');
+
+      const parsed=buildFromParsed(extractComments(src, lang));
+      const code=parsed.code, comments=parsed.comments;
+      f[name]={path:name, lang, lines: code.length?code:['']};
+      cur=name; activeLang=lang;
+
+      const key=curProj+'::'+name;
+      NOTES[key]={};
+      comments.forEach(c=>{
+        const m=NOTES[key];
+        if(m[c.line]) m[c.line].text += '\n\n' + c.text;
+        else m[c.line]={text:c.text, fp:hashLine(f[name].lines[c.line-1]||''), kind:'comment'};
+      });
+
+      usingCustomData=true;
+      saveAll(); renderProj(); renderNav(); renderCode(); showView('code');
+      toast('已导入 '+code.length+' 行 · 摘出 '+Object.keys(NOTES[key]).length+' 张注释卡');
+      return true;
+    }
+  });
+
+  const box=document.getElementById('mLang');
+  const ta=document.getElementById('mCode');
+  ta.addEventListener('input',()=>{
+    const d=detectLang(ta.value);
+    if(d!==lang){
+      lang=d;
+      [...box.children].forEach(b=>b.classList.toggle('on', b.dataset.l===lang));
+    }
+    const inp=document.getElementById('mName');
+    if(!inp.value) inp.placeholder=suggestName(ta.value, lang);
+  });
+  box.addEventListener('click', e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    lang=b.dataset.l;
+    [...box.children].forEach(x=>x.classList.toggle('on', x===b));
+  });
+  setTimeout(()=>ta.focus(), 60);
 };
 
 function renameFileDialog(k){
@@ -1242,6 +1434,25 @@ function renderLost(lost){
 
 function buildNoteCard(no, entry){
   const note = entry.note, from = entry.from, state = entry.state;
+
+  /* 从源码摘出来的注释：只显示注释本身，不带分类标签 */
+  if(note.kind === 'comment' && state === 'ok'){
+    const nb=document.createElement('div');
+    nb.className='nb cmt'; nb.dataset.ln=no;
+    const t=document.createElement('div');
+    t.className='ctext'; t.contentEditable='true'; t.textContent=note.text||'';
+    t.addEventListener('input',()=>{ note.text=t.innerText; saveAll(); });
+    t.addEventListener('blur',()=>{
+      const nm=NOTES[nkey()];
+      if(nm[from] && String(nm[from].text||'').trim()===''){ delete nm[from]; saveAll(); renderCode(); }
+    });
+    const del=document.createElement('button');
+    del.className='cdel'; del.textContent='×';
+    del.onclick=()=>{ delete NOTES[nkey()][from]; saveAll(); renderCode(); };
+    nb.append(t,del);
+    return nb;
+  }
+
   const nb=document.createElement('div');
   nb.className='nb'+(state==='moved'?' moved':'')+(state==='conflict'?' dup':'');
   nb.dataset.ln=no;
@@ -1298,7 +1509,7 @@ function buildNoteCard(no, entry){
 
 function addNote(no){
   NOTES[nkey()]=NOTES[nkey()]||{};
-  NOTES[nkey()][no]={text:'', fp:hashLine(files()[cur].lines[no-1] || '')};
+  NOTES[nkey()][no]={text:'', fp:hashLine(files()[cur].lines[no-1] || ''), kind:'note'};
   saveAll(); renderCode();
   const b=document.querySelector('.nb[data-ln="'+no+'"] .body');
   if(b) b.focus();

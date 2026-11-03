@@ -373,8 +373,8 @@
     .splitter{left:calc(100% - var(--notew,384px) - 21px)}
   }
 </style>
-<link rel="stylesheet" href="ui-refresh.css?v=20261103e">
-<link rel="stylesheet" href="presets.css?v=20261103e">
+<link rel="stylesheet" href="ui-refresh.css?v=20261103f">
+<link rel="stylesheet" href="presets.css?v=20261103f">
 </head>
 <body>
 
@@ -1935,7 +1935,7 @@ function shiftNotes(fromLine, delta, isDelete){
 /* 双击空白处进入编辑：点行号或代码区 */
 codeEl.addEventListener('dblclick', e=>{
   const br=e.target.closest('.br');
-  if(br){ e.preventDefault(); showScope(br); return; }
+  if(br){ clearTimeout(bracketTimer); e.preventDefault(); showScope(br); return; }
   const row=e.target.closest('.line');
   if(!row) return;
   if(e.target.closest('.nb')) return;
@@ -1947,6 +1947,7 @@ codeEl.addEventListener('dblclick', e=>{
 /* 单击就能编辑；拖选文字、或在括号上时不触发 */
 let downPt=null;
 let pendingCardFocus=null;   // 提交代码编辑后，把焦点交还给刚点的那张卡片
+let bracketTimer=null;       // 括号单击延迟进入编辑，给双击留出机会
 codeEl.addEventListener('mousedown', e=>{
   downPt={x:e.clientX,y:e.clientY};
   const card=e.target.closest('.nb');
@@ -1959,7 +1960,12 @@ codeEl.addEventListener('click', e=>{
   const row=e.target.closest('.line');
   if(!row) return;
   if(e.target.closest('.nb')||e.target.closest('.addnote')||e.target.closest('button')) return;
-  if(e.target.closest('.br')) return;
+  /* 点在括号上：等 240ms，双击出配对范围，单击才进入编辑 */
+  if(e.target.closest('.br')){
+    clearTimeout(bracketTimer);
+    bracketTimer=setTimeout(()=>{ if(editingLine<0) startEdit(+row.dataset.i, null); }, 240);
+    return;
+  }
   /* 拖动超过几个像素说明是在选文字，不要进入编辑 */
   if(downPt && (Math.abs(e.clientX-downPt.x)>4 || Math.abs(e.clientY-downPt.y)>4)) return;
   const sel=window.getSelection();
@@ -2469,6 +2475,6 @@ document.addEventListener('keydown',e=>{
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();
 </script>
-<script src="ui-refresh.js?v=20261103e"></script>
+<script src="ui-refresh.js?v=20261103f"></script>
 </body>
 </html>

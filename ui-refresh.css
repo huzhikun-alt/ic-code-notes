@@ -200,11 +200,13 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 .nb.cmt:hover .cdel,.nb.cmt:focus-within .cdel{opacity:.8;pointer-events:auto}
 .nb .cdel:hover{color:var(--rose)}
 
-/* the "+" lives in the gutter, keeps rows a constant height */
-.addnote{position:absolute;left:2px;top:50%;transform:translateY(-50%);width:20px;height:20px;
-  font-size:0;border:0;background:transparent;color:var(--accent);opacity:0;line-height:1}
+/* the "+" must sit at the end of the code, not over the gutter */
+.slot{position:relative}
+.addnote{position:absolute;left:0;top:50%;transform:translateY(-50%);width:20px;height:20px;
+  font-size:0;border:0;background:transparent;color:var(--accent);opacity:0;line-height:1;
+  pointer-events:none}
 .addnote::before{content:"+";font-size:15px}
-.line:hover .addnote{opacity:.85}
+.line:hover .addnote{opacity:.85;pointer-events:auto}
 .addnote:hover{opacity:1;background:#d8a94f1f;border-radius:5px}
 
 /* ---------------- modes ---------------- */

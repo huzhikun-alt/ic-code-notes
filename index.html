@@ -373,8 +373,8 @@
     .splitter{left:calc(100% - var(--notew,384px) - 21px)}
   }
 </style>
-<link rel="stylesheet" href="ui-refresh.css?v=20261103d">
-<link rel="stylesheet" href="presets.css?v=20261103d">
+<link rel="stylesheet" href="ui-refresh.css?v=20261103e">
+<link rel="stylesheet" href="presets.css?v=20261103e">
 </head>
 <body>
 
@@ -450,8 +450,16 @@
         <span class="lgb" id="flang"></span>
         <span class="m" id="fmeta"></span>
         <select id="noteMode" class="mode-picker" aria-label="批注显示模式"><option value="inline">行末批注</option><option value="side">右侧对齐</option><option value="plain">纯代码</option></select>
+        <button class="editbtn" id="btnRawEdit" title="在一个完整文本框里编辑整份代码">整段编辑</button>
       </div>
       <div class="code" id="code"></div>
+      <div class="raw" id="raw" hidden>
+        <div class="raw-gutter" id="rawGutter"></div>
+        <div class="raw-body">
+          <pre class="raw-hl" id="rawHl" aria-hidden="true"></pre>
+          <textarea id="rawInput" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+        </div>
+      </div>
       <div class="splitter" id="splitter" title="左右拖动调整笔记列宽度"></div>
     </section>
 
@@ -1443,7 +1451,77 @@ function flash(name){
    ============================================================ */
 const codeEl = document.getElementById('code');
 
+/* ---------- 整段编辑：一个完整文本框 ---------- */
+const rawEl=document.getElementById('raw');
+const rawInput=document.getElementById('rawInput');
+const rawHl=document.getElementById('rawHl');
+const rawGutter=document.getElementById('rawGutter');
+const btnRaw=document.getElementById('btnRawEdit');
+let rawMode=false;
+
+function rawHighlight(line, lang){
+  const kws=new Set(KEYWORDS[lang]||[]);
+  const html=tokenize(line, lang).map(tk=>{
+    const cls = tk.t==='id' ? (kws.has(tk.v)?'tk-k':'tk-p') : 'tk-'+tk.t;
+    return '<span class="'+cls+'">'+esc(tk.v)+'</span>';
+  }).join('');
+  return html || '&nbsp;';
+}
+function paintRaw(){
+  const lang=hasFile()?files()[cur].lang:'perl';
+  const lines=rawInput.value.split('\n');
+  rawHl.innerHTML=lines.map(l=>rawHighlight(l,lang)).join('\n')+'\n';
+  rawGutter.textContent=lines.map((_,i)=>i+1).join('\n');
+  syncRawScroll();
+}
+function syncRawScroll(){
+  rawHl.scrollTop=rawInput.scrollTop;
+  rawHl.scrollLeft=rawInput.scrollLeft;
+  rawGutter.scrollTop=rawInput.scrollTop;
+}
+function enterRaw(){
+  if(!hasFile()) return;
+  rawMode=true;
+  rawInput.value=files()[cur].lines.join('\n');
+  rawEl.hidden=false;
+  codeEl.style.display='none';
+  document.getElementById('splitter').style.display='none';
+  btnRaw.textContent='完成';
+  btnRaw.classList.add('on');
+  paintRaw();
+  rawInput.focus();
+  rawInput.setSelectionRange(0,0);
+  rawInput.scrollTop=0;
+}
+function exitRaw(){
+  if(!rawMode) return;
+  rawMode=false;
+  const lines=rawInput.value.replace(/\r\n?/g,'\n').split('\n');
+  const f=files()[cur];
+  snapshot('整段编辑');
+  f.lines=lines.length?lines:[''];
+  rawEl.hidden=true;
+  codeEl.style.display='';
+  document.getElementById('splitter').style.display='';
+  btnRaw.textContent='整段编辑';
+  btnRaw.classList.remove('on');
+  saveAll(); renderNav(); renderCode();
+}
+btnRaw.addEventListener('click', ()=>{ rawMode ? exitRaw() : enterRaw(); });
+rawInput.addEventListener('input', paintRaw);
+rawInput.addEventListener('scroll', syncRawScroll);
+rawInput.addEventListener('keydown', ev=>{
+  if(ev.key==='Tab'){
+    ev.preventDefault();
+    const s=rawInput.selectionStart, e=rawInput.selectionEnd;
+    rawInput.setRangeText('    ', s, e, 'end');
+    paintRaw();
+  }
+  if(ev.key==='Escape'){ ev.preventDefault(); exitRaw(); }
+});
+
 function renderCode(){
+  if(rawMode){ rawMode=false; rawEl.hidden=true; codeEl.style.display=''; btnRaw.textContent='整段编辑'; }
   codeEl.replaceChildren();
   document.getElementById('fpath').textContent = hasFile() ? curProj+'/'+files()[cur].path : curProj;
   document.getElementById('flang').textContent = hasFile()?LANGS[files()[cur].lang]:'—';
@@ -2391,6 +2469,6 @@ document.addEventListener('keydown',e=>{
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();
 </script>
-<script src="ui-refresh.js?v=20261103d"></script>
+<script src="ui-refresh.js?v=20261103e"></script>
 </body>
 </html>

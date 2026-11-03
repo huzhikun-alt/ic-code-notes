@@ -362,3 +362,23 @@ html[data-note-mode="plain"] .slot{display:none}
   html[data-note-mode="inline"] .slot .nb{max-width:100%}
   .lib{padding:18px}
 }
+
+/* ============================================================
+   Whole-file editor: one continuous text box
+   ============================================================ */
+.raw{position:absolute;inset:0;display:flex;background:var(--paper)}
+.raw[hidden]{display:none}
+.raw-gutter{width:58px;flex:none;padding:16px 12px 40px 0;text-align:right;color:var(--muted);
+  font:11px/22px var(--mono);overflow:hidden;user-select:none;border-right:1px solid var(--edge);
+  white-space:pre}
+.raw-body{position:relative;flex:1;overflow:hidden}
+.raw-hl{position:absolute;inset:0;margin:0;padding:16px 24px 40px;font:13px/22px var(--mono);
+  white-space:pre;overflow:auto;pointer-events:none;color:var(--ink);tab-size:2}
+.raw-body textarea{position:absolute;inset:0;width:100%;height:100%;margin:0;
+  padding:16px 24px 40px;border:0;outline:none;resize:none;background:transparent;
+  color:transparent;caret-color:var(--ink);font:13px/22px var(--mono);white-space:pre;
+  overflow:auto;tab-size:2}
+.raw-body textarea::selection{background:color-mix(in srgb,var(--teal) 30%,transparent)}
+.chead .editbtn{padding:6px 11px;border:1px solid var(--edge);border-radius:8px;
+  font-size:11.5px;color:var(--tx2);background:transparent}
+.chead .editbtn:hover{border-color:var(--line3);color:var(--ink)}

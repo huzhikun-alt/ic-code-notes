@@ -48,14 +48,19 @@ with sync_playwright() as p:
     r['one_line_height'] = first.evaluate('e=>Math.round(e.getBoundingClientRect().height)')
     r['no_soft_wrap'] = first.evaluate('e=>e.getClientRects().length===1||e.scrollHeight<=32')
 
-    # 5. note hover toolbar lives inside the card
+    # 5. note controls sit to the right of the card and never cover the text
     card = page.locator('.nb').first
     card.hover(); page.wait_for_timeout(250)
     tools = card.locator('.h')
     r['tools_opacity'] = tools.evaluate('e=>getComputedStyle(e).opacity')
-    r['tools_inside_card'] = tools.evaluate("""e=>{
+    r['tools_outside_card'] = tools.evaluate("""e=>{
       const c=e.closest('.nb').getBoundingClientRect(), t=e.getBoundingClientRect();
-      return t.right<=c.right+1 && t.left>=c.left-1;
+      return t.left >= c.right - 1;
+    }""")
+    r['tools_clear_of_text'] = tools.evaluate("""e=>{
+      const b=e.closest('.nb').querySelector('.body').getBoundingClientRect();
+      const t=e.getBoundingClientRect();
+      return t.left >= b.right - 1;
     }""")
 
     # 6. function tooltip is editable and saves
@@ -84,7 +89,7 @@ with sync_playwright() as p:
     assert r['menu_opens'] and r['menu_closes']
     assert r['lostbox_in_body'] == 0
     assert centred is not None and abs(centred) <= 2, f'code line not centred: {centred}'
-    assert r['tools_inside_card']
+    assert r['tools_outside_card'] and r['tools_clear_of_text']
     assert r['tip_editable'] == 'true' and r['tip_saved'] == '改过的描述'
     assert r['lost_dialog_open'] and r['lost_rows'] == 1
     assert not errors, errors

@@ -175,6 +175,36 @@
             min-height:20px}
   .nb .body:empty:before{content:"写点什么…  Ctrl+Enter 完成";color:#6b6252}
   .nb .body:focus{box-shadow:0 0 0 1px #56462a;border-radius:3px}
+  .nb.moved{border-left-color:var(--teal);background:#0f1a19;border-color:#1d3a37}
+  .nb.moved .h .tag{color:var(--teal)}
+  .nb.dup{border-left-color:var(--rose);background:#1a1015;border-color:#3d1f2b}
+  .slot .nb + .nb{margin-top:7px}
+  .achip{font:9px var(--mono);color:var(--teal);background:rgba(79,208,191,.1);
+         border:1px solid #21403c;border-radius:4px;padding:0 5px;cursor:help}
+  .achip.bad{color:var(--rose);background:rgba(242,121,155,.1);border-color:#4a2532}
+  .pinbtn{font-size:9.5px;color:var(--teal);border:1px solid #21403c;border-radius:4px;
+          padding:0 5px;line-height:1.5}
+  .pinbtn:hover{background:rgba(79,208,191,.12)}
+
+  /* 未定位笔记 */
+  .lostbox{margin:26px 22px 0;max-width:820px;border:1px solid #3d1f2b;border-radius:10px;
+           background:#150f13;padding:14px 16px}
+  .lostbox .lh{font-size:12.5px;color:#f0a8bb;display:flex;align-items:center;gap:8px;
+               margin-bottom:4px;flex-wrap:wrap}
+  .lostbox .lh span{font:9.5px var(--mono);background:rgba(242,121,155,.14);border-radius:9px;
+                    padding:0 6px}
+  .lostbox .lh i{font-style:normal;font-size:11px;color:#8c6a76;flex-basis:100%;
+                 margin-top:2px;line-height:1.6}
+  .lcard{border-top:1px dashed #3a2530;padding:10px 0 8px;margin-top:8px}
+  .lcard .ltx{font-size:12.2px;line-height:1.7;color:#d8c8ce;white-space:pre-wrap}
+  .lcard .lmeta{display:flex;gap:8px;align-items:center;margin-top:7px;font-size:10.5px;
+                color:#8c6a76;flex-wrap:wrap}
+  .lcard .lmeta input{background:#0c1016;border:1px solid #3d2a34;border-radius:5px;
+                      padding:3px 6px;color:var(--tx);font-size:11px;outline:none}
+  .lcard .lmeta input:focus{border-color:#6b3b4a}
+  .lcard .lmeta button{font-size:10.5px;border:1px solid #3d2a34;border-radius:5px;padding:2px 8px;
+                       color:#d9b3c0}
+  .lcard .lmeta button:hover{background:#2a1a20;color:#fff}
 
   .tk-k{color:#c792ea} .tk-s{color:#c3e88d} .tk-c{color:#55657c;font-style:italic}
   .tk-n{color:#f78c6c} .tk-p{color:#8ea3bd}
@@ -504,14 +534,78 @@ let LIB = {
   ]
 };
 
-let NOTES = {
-  'uart_log_tools::uart_rx.pl':{6:'parse_line 在这里定义。只做拆分和类型转换，没有副作用。',
-                                13:'normalize 用了 /r 修饰符，返回新串、不改 $v。'},
-  'uart_log_tools::check_log.pl':{8:'normalize 是从 uart_rx.pl require 进来的。悬停就能看到描述。',
-                                  10:'返回 hashref，取字段用 $r->{byte}，不是 $r{byte}。'},
-  'uart_log_tools::sat_alu.sv':{12:'先扩到 33 位再相加，第 32 位就是进位。'},
-  'dma_ctrl::dma_regs.pl':{6:'⚠ 这个 normalize 和 uart_log_tools 里的不是同一个：它只裁行尾。'}
-};
+/* ============================================================
+   笔记锚点
+   每条笔记不存"第几行"，而是存"写的时候那一行的内容指纹"。
+   代码变了就按指纹把笔记找回来；找不到就进「未定位」，绝不静默挪位置。
+   ============================================================ */
+function hashLine(s){
+  let h=5381;
+  const t=String(s==null?'':s).trim();
+  for(let i=0;i<t.length;i++) h=((h*33)^t.charCodeAt(i))>>>0;
+  return h.toString(36);
+}
+
+let NOTES = {};
+function seedNote(fileKey, lineNo, text, fpLine, fpOverride){
+  const [pk, fk] = fileKey.split('::');
+  const lines = PROJECTS[pk].files[fk].lines;
+  NOTES[fileKey] = NOTES[fileKey] || {};
+  NOTES[fileKey][lineNo] = {
+    text,
+    fp: fpOverride || hashLine(lines[(fpLine||lineNo)-1] || '')
+  };
+}
+
+seedNote('uart_log_tools::uart_rx.pl', 6, 'parse_line 在这里定义。只做拆分和类型转换，没有副作用。');
+seedNote('uart_log_tools::uart_rx.pl', 13, 'normalize 用了 /r 修饰符，返回新串、不改 $v。');
+seedNote('uart_log_tools::check_log.pl', 8, 'normalize 是从 uart_rx.pl require 进来的。悬停就能看到描述。');
+seedNote('uart_log_tools::check_log.pl', 10, '返回 hashref，取字段用 $r->{byte}，不是 $r{byte}。');
+seedNote('uart_log_tools::sat_alu.sv', 12, '先扩到 33 位再相加，第 32 位就是进位。');
+seedNote('dma_ctrl::dma_regs.pl', 6, '⚠ 这个 normalize 和 uart_log_tools 里的不是同一个：它只裁行尾。');
+
+/* 演示一：锚点记在第 5 行，但指纹属于第 11 行 → 会自动重定位 */
+seedNote('uart_log_tools::check_log.pl', 5,
+  '这条笔记当初写在第 5 行，后来上面插入了代码，锚点自己跟到了真正的 printf 那一行。', 11);
+
+/* 演示二：指纹对不上任何一行 → 进「未定位」 */
+seedNote('uart_log_tools::check_log.pl', 99,
+  '这条笔记锚定的代码已经被删掉了。它不会静默消失，而是进「未定位」等你处理。',
+  1, 'zzlost');
+
+/* 把笔记按指纹对回当前代码：ok / moved / conflict / lost */
+function resolveNotes(fileKey, lines){
+  const m = NOTES[fileKey] || {};
+  const byLine = {}, lost = [];
+  Object.keys(m).map(Number).sort((a,b)=>a-b).forEach(key=>{
+    const note = m[key];
+    if(!note || typeof note !== 'object') return;
+    if(note.fp == null) note.fp = hashLine(lines[key-1] || '');
+
+    let target = -1, state = 'ok';
+    if(key > 0 && lines[key-1] !== undefined && hashLine(lines[key-1]) === note.fp){
+      target = key;
+    }else{
+      let best = -1, bestDist = Infinity;
+      lines.forEach((l, i) => {
+        if(hashLine(l) === note.fp){
+          const d = Math.abs((i+1) - Math.abs(key));
+          if(d < bestDist){ bestDist = d; best = i+1; }
+        }
+      });
+      if(best > 0){ target = best; state = 'moved'; }
+    }
+    if(target > 0){
+      (byLine[target] = byLine[target] || []).push({note, state, from:key});
+    }else{
+      lost.push({note, from:key});
+    }
+  });
+  Object.keys(byLine).forEach(k=>{
+    if(byLine[k].length > 1) byLine[k].forEach((e,i)=>{ if(i>0) e.state='conflict'; });
+  });
+  return {byLine, lost};
+}
 
 /* ============================================================
    状态 + 存储
@@ -535,7 +629,17 @@ try{
   }
   const l=localStorage.getItem(LS.lib), n=localStorage.getItem(LS.notes), p=localStorage.getItem(LS.proj);
   if(l) LIB=JSON.parse(l);
-  if(n) NOTES=JSON.parse(n);
+  if(n){
+    NOTES=JSON.parse(n);
+    /* 旧格式 {行号: "文本"} → {行号: {text, fp}}；没有指纹的按当前内容补上 */
+    Object.keys(NOTES||{}).forEach(k=>{
+      const m=NOTES[k]||{};
+      Object.keys(m).forEach(ln=>{
+        if(typeof m[ln]==='string') m[ln]={text:m[ln], fp:null};
+        else if(m[ln] && typeof m[ln]==='object' && m[ln].fp===undefined) m[ln].fp=null;
+      });
+    });
+  }
   if(p && PROJECTS[p]) curProj=p;
 }catch(e){}
 
@@ -1019,12 +1123,14 @@ function renderCode(){
   const names=new Set((LIB[f.lang]||[]).map(x=>x.name));
   const kws=new Set(KEYWORDS[f.lang]||[]);
   const notes=NOTES[nkey()]||{};
+  const res=resolveNotes(nkey(), f.lines);
 
   document.getElementById('fmeta').textContent =
-    f.lines.length+' 行 · '+Object.keys(notes).length+' 条笔记';
+    f.lines.length+' 行 · '+Object.keys(notes).length+' 条笔记'+
+    (res.lost.length?' · '+res.lost.length+' 条未定位':'');
 
   f.lines.forEach((line,i)=>{
-    const no=i+1, has=notes[no]!==undefined;
+    const no=i+1, list=res.byLine[no]||[], has=list.length>0;
     const row=document.createElement('div');
     row.className='line'+(has?' an':'')+(i===editingLine?' editing':'');
 
@@ -1056,7 +1162,7 @@ function renderCode(){
 
     const slot=document.createElement('div');
     slot.className='slot';
-    if(has) slot.appendChild(buildNoteCard(no,notes[no]));
+    if(has) list.forEach(entry=>slot.appendChild(buildNoteCard(no, entry)));
     else{
       const add=document.createElement('button');
       add.className='addnote'; add.textContent='+ 写笔记';
@@ -1084,35 +1190,106 @@ function renderCode(){
     }
   });
 
+  renderLost(res.lost);
   document.getElementById('editbar').classList.toggle('on', editingLine>=0);
 }
 
-function buildNoteCard(no,text){
+/* 未定位的笔记：代码删了 / 指纹对不上 */
+function renderLost(lost){
+  const old=document.getElementById('lostbox');
+  if(old) old.remove();
+  if(!lost || !lost.length) return;
+
+  const box=document.createElement('div');
+  box.id='lostbox';
+  box.className='lostbox';
+  box.innerHTML='<div class="lh">未定位的笔记 <span>'+lost.length+'</span>'+
+    '<i>这些笔记锚定的代码行找不到了，选一个新行号重新绑定，或者删掉。</i></div>';
+
+  lost.forEach(({note, from})=>{
+    const c=document.createElement('div');
+    c.className='lcard';
+    const body=document.createElement('div');
+    body.className='ltx'; body.textContent=note.text || '（空笔记）';
+    const meta=document.createElement('div');
+    meta.className='lmeta';
+    meta.innerHTML='<span>原第 '+Math.abs(from)+' 行</span>';
+    const inp=document.createElement('input');
+    inp.type='number'; inp.min='1'; inp.placeholder='行号';
+    inp.style.width='64px';
+    const bind=document.createElement('button');
+    bind.textContent='绑定';
+    bind.onclick=()=>{
+      const n=parseInt(inp.value,10);
+      const lines=files()[cur].lines;
+      if(!n || n<1 || n>lines.length){ toast('行号超出范围'); return; }
+      const m=NOTES[nkey()];
+      let moved=null;
+      Object.keys(m).forEach(k=>{ if(m[k]===note && +k===from){ moved=m[k]; delete m[k]; } });
+      if(moved){ m[n]=moved; } else { m[n]=note; Object.keys(m).forEach(k=>{ if(k===String(from)) delete m[k]; }); }
+      m[n].fp=hashLine(lines[n-1]);
+      saveAll(); renderCode(); toast('已绑定到第 '+n+' 行');
+    };
+    const del=document.createElement('button');
+    del.textContent='删除';
+    del.onclick=()=>{ delete NOTES[nkey()][from]; saveAll(); renderCode(); };
+    meta.append(inp, bind, del);
+    c.append(body, meta);
+    box.appendChild(c);
+  });
+  codeEl.appendChild(box);
+}
+
+function buildNoteCard(no, entry){
+  const note = entry.note, from = entry.from, state = entry.state;
   const nb=document.createElement('div');
-  nb.className='nb'; nb.dataset.ln=no;
+  nb.className='nb'+(state==='moved'?' moved':'')+(state==='conflict'?' dup':'');
+  nb.dataset.ln=no;
+
   const h=document.createElement('div');
   h.className='h';
   h.innerHTML='<span class="tag">我的笔记</span><span class="lnk">第 '+no+' 行</span>';
+  if(state==='moved'){
+    const chip=document.createElement('span');
+    chip.className='achip'; chip.textContent='↻ 原第 '+Math.abs(from)+' 行';
+    chip.title='代码改动后，这条笔记按内容指纹自动找回了位置';
+    h.appendChild(chip);
+    const pin=document.createElement('button');
+    pin.className='pinbtn'; pin.textContent='固定';
+    pin.onclick=()=>{
+      const m=NOTES[nkey()];
+      const v=m[from]; delete m[from];
+      v.fp=hashLine(files()[cur].lines[no-1]);
+      m[no]=v; saveAll(); renderCode(); toast('已固定到第 '+no+' 行');
+    };
+    h.appendChild(pin);
+  }
+  if(state==='conflict'){
+    const chip=document.createElement('span');
+    chip.className='achip bad'; chip.textContent='⚠ 与其他笔记重叠';
+    h.appendChild(chip);
+  }
+
   const tools=document.createElement('div');
   tools.className='tools';
   const st=document.createElement('span'); st.className='st'; st.textContent='自动保存';
   const del=document.createElement('button'); del.textContent='删除';
-  del.onclick=()=>{ delete NOTES[nkey()][no]; saveAll(); renderCode(); };
+  del.onclick=()=>{ delete NOTES[nkey()][from]; saveAll(); renderCode(); };
   tools.append(st,del);
   h.appendChild(tools);
 
   const body=document.createElement('div');
   body.className='body'; body.contentEditable='true';
-  body.textContent=text;
-  body.addEventListener('input',()=>{ NOTES[nkey()][no]=body.innerText; saveAll(); });
+  body.textContent=note.text || '';
+  body.addEventListener('input',()=>{ note.text=body.innerText; saveAll(); });
   body.addEventListener('keydown',ev=>{
     if(ev.key==='Enter'&&(ev.ctrlKey||ev.metaKey)){ ev.preventDefault(); body.blur(); }
     if(ev.key==='Escape'){ body.blur(); }
   });
   body.addEventListener('blur',()=>{
     const nm=NOTES[nkey()];
-    if(nm && nm[no]!==undefined && nm[no].trim()===''){
-      delete nm[no]; saveAll(); renderCode();
+    if(nm && nm[from] && String(nm[from].text||'').trim()===''){
+      delete nm[from]; saveAll(); renderCode();
     }
   });
   nb.append(h,body);
@@ -1121,7 +1298,7 @@ function buildNoteCard(no,text){
 
 function addNote(no){
   NOTES[nkey()]=NOTES[nkey()]||{};
-  NOTES[nkey()][no]='';
+  NOTES[nkey()][no]={text:'', fp:hashLine(files()[cur].lines[no-1] || '')};
   saveAll(); renderCode();
   const b=document.querySelector('.nb[data-ln="'+no+'"] .body');
   if(b) b.focus();
@@ -1140,6 +1317,9 @@ function commitEdit(i, insertAfter, deleteInstead){
   const src=row?row.querySelector('.src'):null;
   const text=src?src.innerText.replace(/\n$/,'').replace(/\u00a0/g,''):f.lines[i];
   editingLine=-1;
+  /* 改动前先记下这一行上挂着哪些笔记，改完把它们的指纹更新成新内容 */
+  const beforeMap=resolveNotes(nkey(), f.lines);
+  const touched=(beforeMap.byLine[i+1]||[]).map(e=>e.note);
 
   if(deleteInstead){
     f.lines.splice(i,1);
@@ -1151,6 +1331,7 @@ function commitEdit(i, insertAfter, deleteInstead){
   }
 
   f.lines[i]=text;
+  touched.forEach(n=>{ n.fp=hashLine(text); });
   if(insertAfter){
     f.lines.splice(i+1,0,'');
     shiftNotes(i+2,1,false);
@@ -1171,7 +1352,7 @@ function shiftNotes(fromLine, delta, isDelete){
   Object.keys(nm).forEach(k=>{
     const n=+k;
     if(isDelete){
-      if(n===fromLine) return;               // 被删那行的笔记丢弃
+      if(n===fromLine){ out[-n]=nm[k]; return; }   // 行没了 → 笔记转为「未定位」，不静默丢弃
       out[n>fromLine?n-1:n]=nm[k];
     }else{
       out[n>=fromLine?n+delta:n]=nm[k];
@@ -1219,8 +1400,6 @@ codeEl.addEventListener('contextmenu', e=>{
       if(f2.lines.length<=1){ f2.lines[0]=''; }
       else{
         f2.lines.splice(idx,1);
-        const nm=NOTES[nkey()];
-        if(nm&&nm[idx+1]!==undefined){ delete nm[idx+1]; }
         shiftNotes(idx+1,-1,true);
       }
       saveAll(); renderCode();

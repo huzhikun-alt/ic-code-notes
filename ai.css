@@ -135,3 +135,17 @@ body.ai-open .view{right:368px}
 .nb-range .rg-badge{left:6px;top:-7px}
 .ai-msg.ai{align-self:flex-start}
 .ai-msg.user{align-self:flex-end}
+
+/* 侧栏开合后，头部与动作按钮不要换行 */
+.chead{flex-wrap:nowrap}
+.chead .p{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chead .lgb,.chead .m,.chead .mode-picker,.chead .editbtn,.chead .ai-toggle{flex:none;white-space:nowrap}
+.ai-head{flex-wrap:nowrap}
+.ai-title,.ai-mode{white-space:nowrap}
+.ai-act{white-space:nowrap;overflow:hidden}
+.ai-act span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.ai-msg,.ai-result p{overflow-wrap:anywhere}
+.nb .rg-body:empty:before{content:"写下这段的说明…";color:var(--muted)}
+
+/* 可编辑的空行靠 CSS 撑开，不用占位字符 */
+.line .src[contenteditable="true"]{display:inline-block;min-width:2px;min-height:1.25em}

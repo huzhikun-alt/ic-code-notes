@@ -373,9 +373,9 @@
     .splitter{left:calc(100% - var(--notew,384px) - 21px)}
   }
 </style>
-<link rel="stylesheet" href="ui-refresh.css?v=20261104f">
-<link rel="stylesheet" href="presets.css?v=20261104f">
-<link rel="stylesheet" href="ai.css?v=20261104f">
+<link rel="stylesheet" href="ui-refresh.css?v=20261104g">
+<link rel="stylesheet" href="presets.css?v=20261104g">
+<link rel="stylesheet" href="ai.css?v=20261104g">
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><defs><symbol id="i-sparkles" viewBox="0 0 24 24">
@@ -558,7 +558,7 @@
     <div class="sep"></div>
     <button role="menuitem" id="btnReset" class="dang"><svg class="ic"><use href="#i-rotate-ccw"/></svg>重置数据</button>
     <div class="sep"></div>
-    <div class="ver" id="buildVer">构建 20261104-0340</div>
+    <div class="ver" id="buildVer">构建 20261104-0415</div>
   </div>
 </div>
 
@@ -1119,6 +1119,10 @@ activeLang = cur ? PROJECTS[curProj].files[cur].lang : 'perl';
 /* ============================================================
    通用
    ============================================================ */
+function selectAllIn(el){
+  const r=document.createRange(); r.selectNodeContents(el);
+  const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r);
+}
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 function tokenize(line, lang){
@@ -1725,7 +1729,7 @@ function renderCode(){
     if(i===editingLine){
       src.contentEditable='true';
       // 空行也要占一个行高，否则新文件的第一行看不见也点不到
-      src.textContent=line || '\u00a0';
+      src.textContent=line;
     }else{
       let col=0;
       tokenize(line,f.lang).forEach(tk=>{
@@ -1894,10 +1898,15 @@ function buildNoteCard(no, entry){
       const nm=NOTES[nkey()];
       if(nm[from] && String(nm[from].text||'').trim()===''){ delete nm[from]; saveAll(); renderCode(); }
     });
-    const del=document.createElement('button');
-    del.className='cdel'; del.textContent='×';
-    del.onclick=()=>{ snapshot('删除第 '+no+' 行注释'); delete NOTES[nkey()][from]; saveAll(); renderCode(); };
-    nb.append(t,del);
+    nb.tabIndex=0;
+    t.addEventListener('dblclick',()=>selectAllIn(t));
+    nb.addEventListener('keydown',ev=>{
+      if(document.activeElement===nb && (ev.key==='Delete'||ev.key==='Backspace')){
+        ev.preventDefault();
+        delete NOTES[nkey()][from]; saveAll(); renderCode();
+      }
+    });
+    nb.append(t);
     return nb;
   }
 
@@ -1931,10 +1940,6 @@ function buildNoteCard(no, entry){
 
   const tools=document.createElement('div');
   tools.className='tools';
-  const st=document.createElement('span'); st.className='st'; st.textContent='自动保存';
-  const del=document.createElement('button'); del.textContent='删除';
-  del.onclick=()=>{ snapshot('删除第 '+no+' 行笔记'); delete NOTES[nkey()][from]; saveAll(); renderCode(); };
-  tools.append(st,del);
   h.appendChild(tools);
 
   const body=document.createElement('div');
@@ -1949,6 +1954,14 @@ function buildNoteCard(no, entry){
     const nm=NOTES[nkey()];
     if(nm && nm[from] && String(nm[from].text||'').trim()===''){
       delete nm[from]; saveAll(); renderCode();
+    }
+  });
+  nb.tabIndex=0;
+  body.addEventListener('dblclick',()=>selectAllIn(body));
+  nb.addEventListener('keydown',ev=>{
+    if(document.activeElement===nb && (ev.key==='Delete'||ev.key==='Backspace')){
+      ev.preventDefault();
+      delete NOTES[nkey()][from]; saveAll(); renderCode();
     }
   });
   if(note.extracted){
@@ -2689,7 +2702,7 @@ document.addEventListener('keydown',e=>{
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();
 </script>
-<script src="ui-refresh.js?v=20261104f"></script>
-<script src="ai.js?v=20261104f"></script>
+<script src="ui-refresh.js?v=20261104g"></script>
+<script src="ai.js?v=20261104g"></script>
 </body>
 </html>

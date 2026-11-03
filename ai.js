@@ -63,37 +63,42 @@
     const el = document.createElement('div');
     el.className = 'nb nb-range' + (r.author==='ai' ? ' ai' : '');
     el.dataset.range = r.id;
+    el.tabIndex = 0;
     el.innerHTML =
       '<div class="rg-badge">' + r.from + '–' + r.to + '</div>' +
-      '<div class="rg-body"></div>' +
-      '<div class="rg-tools">' +
-        (r.author==='ai' && r.status==='draft'
-          ? '<button data-act="accept" title="采纳这条批注"><svg class="ic"><use href="#i-check"/></svg></button>'
-          : '') +
-        '<button data-act="edit" title="编辑"><svg class="ic"><use href="#i-pencil"/></svg></button>' +
-        '<button data-act="del" title="删除"><svg class="ic"><use href="#i-trash"/></svg></button>' +
-      '</div>';
+      '<div class="rg-body" contenteditable="true"></div>' +
+      (r.author==='ai' && r.status==='draft'
+        ? '<div class="rg-tools"><button data-act="accept" title="采纳"><svg class="ic"><use href="#i-check"/></svg></button></div>'
+        : '');
     const body = el.querySelector('.rg-body');
-    body.textContent = r.text || '（空批注）';
+    body.textContent = r.text || '';
 
-    el.querySelectorAll('button').forEach(btn => {
-      btn.onclick = ev => {
-        ev.stopPropagation();
-        const act = btn.dataset.act;
-        if(act === 'accept'){
-          r.status = 'ok'; saveRanges(); renderCode();
-          toast('已采纳');
-        }else if(act === 'del'){
-          const list = rangesOf().filter(x => x.id !== r.id);
-          RANGES[rkey()] = list; saveRanges(); renderCode();
-          toast('已删除范围批注');
-        }else if(act === 'edit'){
-          body.contentEditable = 'true'; body.focus();
-          document.execCommand && document.execCommand('selectAll', false, null);
-          body.onblur = () => { r.text = body.innerText.trim(); body.contentEditable='false'; saveRanges(); };
-        }
-      };
+    // 删空文字 = 删除这条批注
+    body.addEventListener('input', ()=>{ r.text = body.innerText; saveRanges(); });
+    body.addEventListener('blur', ()=>{
+      if(!body.innerText.trim()){
+        RANGES[rkey()] = rangesOf().filter(x => x.id !== r.id);
+        saveRanges(); renderCode();
+      }
     });
+    body.addEventListener('dblclick', ()=>{
+      const range = document.createRange(); range.selectNodeContents(body);
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    });
+    // 卡片本身聚焦时按 Delete / Backspace 删除整条
+    el.addEventListener('keydown', ev => {
+      if(document.activeElement === el && (ev.key==='Delete'||ev.key==='Backspace')){
+        ev.preventDefault();
+        RANGES[rkey()] = rangesOf().filter(x => x.id !== r.id);
+        saveRanges(); renderCode(); toast('已删除范围批注');
+      }
+    });
+
+    const acc = el.querySelector('[data-act="accept"]');
+    if(acc) acc.onclick = ev => {
+      ev.stopPropagation();
+      r.status = 'ok'; saveRanges(); renderCode(); toast('已采纳');
+    };
     return el;
   }
 

@@ -41,7 +41,6 @@
   applyPreset(read('icn-preset', 'paper'));
 
   const themeItem = document.getElementById('themeToggle');
-  themeItem.textContent = '配色方案…';
   themeItem.addEventListener('click', () => {
     const current = root.dataset.preset;
     openModal({
@@ -81,7 +80,7 @@
   const autoItem = document.getElementById('btnAutoComment');
   const syncAuto = () => {
     const on = typeof autoCommentOn === 'function' ? autoCommentOn() : true;
-    autoItem.textContent = '行末注释自动转卡片' + (on ? ' ✓' : '');
+    const al=document.getElementById('autoLabel'); if(al) al.textContent='行末注释自动转卡片'+(on?' ✓':'');
     autoItem.setAttribute('aria-checked', String(on));
   };
   syncAuto();

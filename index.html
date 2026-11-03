@@ -144,7 +144,7 @@
   .chead .editbtn:hover{color:var(--amber);border-color:var(--amber-d)}
 
   .code{padding:10px 0 90px}
-  .line{display:grid;grid-template-columns:minmax(0,1fr) 384px;column-gap:26px;
+  .line{display:grid;grid-template-columns:minmax(0,1fr) var(--notew,384px);column-gap:26px;
         padding:0 22px;align-items:start}
   .line:hover{background:rgba(255,255,255,.022)}
   .line .cl{display:flex;gap:16px;min-width:0}
@@ -156,6 +156,12 @@
              color:#c2d2e4;flex:1;min-width:0}
   .line .src[contenteditable="true"]{outline:none;background:rgba(255,255,255,.05);
               box-shadow:0 0 0 1px #4a3a1d;border-radius:3px;padding:0 3px;margin:0 -3px}
+  /* 括号配对 */
+  .br{cursor:pointer;border-radius:2px}
+  .br:hover{background:rgba(224,180,100,.18)}
+  .br.on{background:rgba(224,180,100,.34);color:#fff;font-weight:600}
+  .line.inscope{background:rgba(224,180,100,.055)}
+  .line.inscope .num{color:#8a7440}
   .line .slot{min-width:0}
   .addnote{opacity:0;font-size:11px;color:#4a5a70;border:1px dashed #26303f;border-radius:6px;
            padding:3px 9px;margin-top:2px;display:inline-block}
@@ -190,6 +196,9 @@
                 transition:.15s}
   .nb.cmt:hover .cdel{opacity:1}
   .nb.cmt .cdel:hover{color:var(--rose)}
+  /* 同一行既有我的笔记、又有原注释：卡片内分块显示 */
+  .nb .xcmt{margin-top:7px;padding:6px 0 0;border-top:1px dashed #3a3120;
+            font-size:11.3px;line-height:1.7;color:#8fa7bd;white-space:pre-wrap}
   .achip{font:9px var(--mono);color:var(--teal);background:rgba(79,208,191,.1);
          border:1px solid #21403c;border-radius:4px;padding:0 5px;cursor:help}
   .achip.bad{color:var(--rose);background:rgba(242,121,155,.1);border-color:#4a2532}
@@ -230,6 +239,11 @@
            box-shadow:0 14px 34px -16px #000}
   .editbar.on{display:flex}
   .editbar b{color:var(--amber);font-weight:500}
+  /* 括号范围提示 */
+  #scope{position:fixed;z-index:180;background:#2a2214;border:1px solid #5c4a24;border-radius:7px;
+         padding:5px 10px;font:11px var(--mono);color:#e3c98c;display:none;
+         box-shadow:0 12px 28px -14px #000;pointer-events:none}
+  #scope.on{display:block}
 
   .emptyfile{padding:70px 0;text-align:center;color:var(--dim);font-size:12.5px;line-height:2}
   .emptyfile button{color:var(--amber);border-bottom:1px dashed var(--amber-d)}
@@ -344,9 +358,20 @@
   #toast.on{opacity:1;transform:translate(-50%,0)}
   ::-webkit-scrollbar{width:9px;height:9px}
   ::-webkit-scrollbar-thumb{background:#222e3e;border-radius:5px}
-  @media (max-width:1320px){.line{grid-template-columns:minmax(0,1fr) 320px;column-gap:18px}}
-  @media (max-width:1080px){.line{grid-template-columns:minmax(0,1fr) 270px;column-gap:14px;
-                                padding:0 14px}}
+
+  /* 代码 / 笔记 之间的可拖动分隔条 */
+  .splitter{position:absolute;top:0;bottom:0;width:14px;z-index:8;cursor:col-resize;
+            left:calc(100% - var(--notew,384px) - 35px)}
+  .splitter::before{content:"";position:absolute;left:6px;top:0;bottom:0;width:2px;
+            background:transparent;transition:background .15s}
+  .splitter:hover::before,.splitter.on::before{background:var(--line3)}
+  .splitter::after{content:"";position:absolute;left:4px;top:10px;width:6px;height:40px;
+            border-radius:3px;background:#2b3648;opacity:0;transition:opacity .15s}
+  .splitter:hover::after,.splitter.on::after{opacity:1}
+  @media (max-width:1080px){
+    .line{column-gap:14px;padding:0 14px}
+    .splitter{left:calc(100% - var(--notew,384px) - 21px)}
+  }
 </style>
 </head>
 <body>
@@ -409,8 +434,10 @@
         <span class="p" id="fpath"></span>
         <span class="lgb" id="flang"></span>
         <span class="m" id="fmeta"></span>
+        <button class="editbtn" id="btnExtract" title="把当前文件里的注释摘到右侧">摘注释</button>
       </div>
       <div class="code" id="code"></div>
+      <div class="splitter" id="splitter" title="左右拖动调整笔记列宽度"></div>
     </section>
 
     <section class="view" id="v-lib">
@@ -437,6 +464,7 @@
 </div>
 
 <div id="tip"></div>
+<div id="scope"></div>
 <div id="menu"></div>
 <div id="mask"><div class="dlg" id="dlgBody"></div></div>
 <div id="toast"></div>
@@ -653,84 +681,178 @@ const cleanBlock = s => s.split('\n')
   .join('\n').trim();
 
 /* 逐行拆成 {code, cmt, only} */
+/* 逐字符扫描一行：
+   认得字符串里的 # 和 //，不会误判成注释；
+   认得 Perl 的 $#array、Python 三引号、Verilog 块注释 */
+function scanLine(line, lang, state){
+  const isV = lang === 'verilog';
+  let i = 0, code = '', cmt = '', pendingBlock = false;
+  const addCmt = t => { if(t) cmt += (cmt ? '\n' : '') + t; };
+
+  while(i < line.length){
+    const ch = line[i];
+
+    /* --- 字符串内部 --- */
+    if(state.quote){
+      if(ch === '\\'){ code += line.slice(i, i + 2); i += 2; continue; }
+      if(state.triple && line.startsWith(state.quote.repeat(3), i)){
+        code += state.quote.repeat(3); i += 3;
+        state.quote = null; state.triple = false; continue;
+      }
+      if(!state.triple && ch === state.quote){
+        code += ch; i++; state.quote = null; continue;
+      }
+      code += ch; i++; continue;
+    }
+
+    /* --- 字符串开始 --- */
+    if(lang === 'python' && (line.startsWith('"""', i) || line.startsWith("'''", i))){
+      state.quote = line[i]; state.triple = true;
+      code += line.slice(i, i + 3); i += 3; continue;
+    }
+    if(ch === '"'){ state.quote = '"'; code += ch; i++; continue; }
+    if(ch === "'" && !isV){ state.quote = "'"; code += ch; i++; continue; }
+
+    /* --- Verilog 块注释 --- */
+    if(isV && line.startsWith('/*', i)){
+      const j = line.indexOf('*/', i + 2);
+      if(j >= 0){ addCmt(line.slice(i + 2, j)); i = j + 2; continue; }
+      addCmt(line.slice(i + 2));
+      pendingBlock = true;
+      break;
+    }
+
+    /* --- 行注释 --- */
+    if(isV && line.startsWith('//', i)){ addCmt(line.slice(i + 2)); break; }
+    if(!isV && ch === '#'){
+      if(lang === 'perl' && code.endsWith('$')){ code += ch; i++; continue; }  // $#array
+      addCmt(line.slice(i + 1));
+      break;
+    }
+
+    code += ch; i++;
+  }
+  return {code: code.replace(/\s+$/, ''), cmt: cmt.trim(), pendingBlock};
+}
+
 function extractComments(src, lang){
-  const cfg = COMMENT_STYLE[lang] || {line:['#'], block:[]};
-  const raw = src.replace(/\r\n?/g,'\n').split('\n');
+  const raw = src.replace(/\r\n?/g, '\n').split('\n');
   const out = [];
+  const state = {quote:null, triple:false};
   let block = null;
+  let carry = '';            // 跨行块注释：注释前那截代码，等注释结束后接回去
 
   for(const srcLine of raw){
-    /* shebang 是给解释器看的指令，不能当注释摘走 */
-    if(!block && /^\s*#!/.test(srcLine)){
-      out.push({code:srcLine.replace(/\s+$/,''), cmt:'', only:false});
+    if(!block && !state.quote && /^\s*#!/.test(srcLine)){
+      out.push({code: srcLine.replace(/\s+$/, ''), cmt:'', only:false});
       continue;
     }
-    let line = srcLine, cmt = '';
-    outer: while(true){
+
+    const startedInBlock = !!block;
+    let rest = srcLine, cmt = '', codeText = carry;
+    carry = '';
+    const addCmt = t => { if(t) cmt += (cmt ? '\n' : '') + t; };
+
+    while(rest !== null){
       if(block){
-        const e = line.indexOf(block.end);
+        const e = rest.indexOf(block.end);
         if(e >= 0){
-          block.buf.push(line.slice(0, e));
-          cmt += (cmt?'\n':'') + cleanBlock(block.buf.join('\n'));
-          line = line.slice(e + block.end.length);
+          block.buf.push(rest.slice(0, e));
+          addCmt(cleanBlock(block.buf.join('\n')));
+          rest = rest.slice(e + block.end.length);
           block = null;
           continue;
         }
-        block.buf.push(line);
-        line = null;
-        break outer;
-      }
-      for(const [st,en] of (cfg.block||[])){
-        const i = line.indexOf(st);
-        if(i < 0) continue;
-        const j = line.indexOf(en, i + st.length);
-        if(j >= 0){
-          cmt += (cmt?'\n':'') + cleanBlock(line.slice(i+st.length, j));
-          line = line.slice(0,i) + line.slice(j+en.length);
-          continue outer;
-        }
-        block = {end:en, buf:[line.slice(i+st.length)]};
-        line = line.slice(0,i);
-        break outer;
-      }
-      break;
-    }
-    if(line !== null){
-      for(const m of (cfg.line||[])){
-        const i = line.indexOf(m);
-        if(i < 0) continue;
-        cmt += (cmt?'\n':'') + line.slice(i + m.length).trim();
-        line = line.slice(0,i);
+        block.buf.push(rest);
+        rest = null;
         break;
       }
+      const r = scanLine(rest, lang, state);
+      addCmt(r.cmt);
+      codeText += r.code;
+      if(r.pendingBlock){ block = {end:'*/', buf:[]}; carry = codeText; codeText = ''; }
+      rest = null;
     }
-    const text = (line===null?'':line).replace(/\s+$/,'');
-    out.push({code:text, cmt:cmt.trim(), only:(line===null)||(text.trim()===''&&!!cmt)});
+
+    const only = !codeText.trim() && (startedInBlock || !!cmt);
+    out.push({code:codeText, cmt:cmt.trim(), only});
   }
   return out;
 }
 
-/* 连续注释合成一组，挂到下一行代码；行尾注释挂本行 */
+/* 连续注释合成一组，挂到下一行代码；行尾注释挂本行。
+   同时返回 map：原第 i 行 → 新文件里的第几行（1 起，-1 表示被删） */
 function buildFromParsed(parsed){
-  const code=[], comments=[];
-  let pending=[];
-  parsed.forEach(p=>{
+  const code = [], comments = [];
+  const map = new Array(parsed.length).fill(-1);
+  let pending = [];
+
+  parsed.forEach((p, idx) => {
     if(p.only){ if(p.cmt) pending.push(p.cmt); return; }
     if(!p.code.trim() && !p.cmt){
       if(pending.length) return;                 // 注释块与代码之间不留空行
-      if(code.length && code[code.length-1].trim()!=='') code.push('');
+      if(code.length && code[code.length-1].trim() !== ''){ code.push(''); map[idx] = code.length; }
       return;
     }
     code.push(p.code);
+    map[idx] = code.length;
     const ln = code.length;
     if(pending.length){ comments.push({line:ln, text:pending.join('\n'), kind:'comment'}); pending=[]; }
     if(p.cmt) comments.push({line:ln, text:p.cmt, kind:'comment'});
   });
+
   if(pending.length && code.length){
     comments.push({line:code.length, text:pending.join('\n'), kind:'comment'});
   }
-  while(code.length && code[code.length-1].trim()==='') code.pop();
-  return {code, comments};
+  while(code.length && code[code.length-1].trim() === '') code.pop();
+
+  /* 被删掉的注释行，继承它下面第一行代码的位置 */
+  for(let i = map.length - 1; i >= 0; i--){
+    if(map[i] === -1 && i + 1 < map.length) map[i] = map[i + 1];
+  }
+  return {code, comments, map};
+}
+
+/* 把当前文件里已有的注释摘到右侧（和粘贴导入同一套逻辑）。
+   删掉注释行会让行号前移，所以要把已有笔记按 map 搬到新行号上。 */
+function reextractCurrent(){
+  if(!hasFile()){ toast('先打开一个文件'); return; }
+  const f=files()[cur], key=nkey();
+  const before=NOTES[key]||{};
+  const res=buildFromParsed(extractComments(f.lines.join('\n'), f.lang));
+
+  if(!res.comments.length){ toast('这个文件里没有可摘出的注释'); return; }
+
+  const newLines=res.code.length?res.code:[''];
+  const newNotes={};
+
+  Object.keys(before).forEach(k=>{
+    const n=+k, nb=before[k];
+    const t=(n>=1 && n<=res.map.length)?res.map[n-1]:-1;
+    if(t===-1){ newNotes[-Math.abs(n||1)]=nb; return; }
+    if(newNotes[t]) newNotes[t].text=(newNotes[t].text||'')+'\n\n'+(nb.text||'');
+    else newNotes[t]={...nb, fp:hashLine(newLines[t-1]||'')};
+  });
+
+  res.comments.forEach(c=>{
+    const ex=newNotes[c.line];
+    const fp=hashLine(newLines[c.line-1]||'');
+    if(!ex){
+      newNotes[c.line]={text:c.text, fp, kind:'comment'};
+    }else if(ex.kind==='comment'){
+      ex.text=(ex.text||'')+'\n\n'+c.text; ex.fp=fp;
+    }else{
+      /* 这行已经有我的笔记：原注释单独存一块，不跟我的笔记混在一起 */
+      ex.extracted=(ex.extracted? ex.extracted+'\n\n' : '')+c.text;
+      ex.fp=fp;
+    }
+  });
+
+  f.lines=newLines;
+  NOTES[key]=newNotes;
+  usingCustomData=true;
+  saveAll(); renderNav(); renderCode();
+  toast('已摘出 '+res.comments.length+' 处注释 · 代码 '+newLines.length+' 行');
 }
 
 /* ============================================================
@@ -1337,16 +1459,20 @@ function renderCode(){
       src.contentEditable='true';
       src.textContent=line;
     }else{
+      let col=0;
       tokenize(line,f.lang).forEach(tk=>{
         const s=document.createElement('span');
         if(tk.t==='id'&&names.has(tk.v)){
           s.className='fx'+(conflictOf(f.lang,tk.v)?' conflict':'');
           s.dataset.name=tk.v;
+        }else if(tk.t==='p' && '()[]{}'.includes(tk.v)){
+          s.className='br'; s.dataset.li=i; s.dataset.col=col;
         }else{
           s.className='tk-'+(tk.t==='id'?(kws.has(tk.v)?'k':'p'):tk.t);
         }
         s.textContent=tk.v;
         src.appendChild(s);
+        col += tk.v.length;
       });
       if(!line) src.innerHTML='&nbsp;';
     }
@@ -1368,11 +1494,35 @@ function renderCode(){
 
     if(i===editingLine){
       const ed=src;
+
+      /* 粘贴：多行自动拆成多行，而不是塞进一行 */
+      ed.addEventListener('paste',ev=>{
+        const cd=ev.clipboardData||window.clipboardData;
+        const txt=cd?cd.getData('text'):'';
+        if(!txt) return;
+        const parts=txt.replace(/\r\n?/g,'\n').split('\n');
+        if(parts.length===1) return;
+        ev.preventDefault();
+        pasteBlock(i, parts);
+      });
+
       ed.addEventListener('keydown',ev=>{
-        if(ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); commitEdit(i,true); }
+        if(ev.key==='Enter' && !ev.shiftKey){
+          ev.preventDefault();
+          const t=ed.innerText.replace(/\u00a0/g,'');
+          const indent=(t.match(/^[ \t]*/)||[''])[0];
+          const opens=/[{([]\s*$/.test(t) || (f.lang==='python' && /:\s*$/.test(t));
+          const unit=f.lang==='python'?'    ':'  ';
+          commitEdit(i,true,false, opens ? indent+unit : indent);
+        }
+        else if(ev.key==='Tab'){
+          ev.preventDefault();
+          document.execCommand('insertText', false, '    ');
+        }
         else if(ev.key==='Escape'){ ev.preventDefault(); cancelEdit(); }
         else if(ev.key==='Backspace' && ed.innerText.trim()==='' ){ ev.preventDefault(); commitEdit(i,true,true); }
       });
+
       ed.addEventListener('blur',()=>{ if(editingLine===i) commitEdit(i,false); });
       requestAnimationFrame(()=>{
         ed.focus();
@@ -1503,6 +1653,13 @@ function buildNoteCard(no, entry){
       delete nm[from]; saveAll(); renderCode();
     }
   });
+  if(note.extracted){
+    const x=document.createElement('div');
+    x.className='xcmt';
+    x.textContent=note.extracted;
+    x.title='这里原来有一段源码注释，已摘到笔记下方';
+    nb.append(x);
+  }
   nb.append(h,body);
   return nb;
 }
@@ -1521,7 +1678,7 @@ function startEdit(i){
   editingLine=i;
   renderCode();
 }
-function commitEdit(i, insertAfter, deleteInstead){
+function commitEdit(i, insertAfter, deleteInstead, newText){
   if(editingLine!==i) return;
   const f=files()[cur];
   const row=codeEl.querySelector('.line[data-i="'+i+'"]');
@@ -1544,7 +1701,7 @@ function commitEdit(i, insertAfter, deleteInstead){
   f.lines[i]=text;
   touched.forEach(n=>{ n.fp=hashLine(text); });
   if(insertAfter){
-    f.lines.splice(i+1,0,'');
+    f.lines.splice(i+1,0,newText||'');
     shiftNotes(i+2,1,false);
     saveAll(); renderCode(); startEdit(i+1);
   }else{
@@ -1554,6 +1711,27 @@ function commitEdit(i, insertAfter, deleteInstead){
 function cancelEdit(){
   editingLine=-1;
   renderCode();
+}
+
+/* 多行粘贴：拆成真正的多行，而不是塞进一行 */
+function pasteBlock(i, parts){
+  const f=files()[cur];
+  const curText=(f.lines[i]||'');
+  const atEmpty=!curText.trim();
+  editingLine=-1;
+
+  if(atEmpty){
+    f.lines.splice(i,1,...parts);
+    const delta=parts.length-1;
+    if(delta>0) shiftNotes(i+2, delta, false);
+  }else{
+    f.lines.splice(i+1,0,...parts);
+    shiftNotes(i+2, parts.length, false);
+  }
+  saveAll(); renderCode();
+  const target=Math.min(atEmpty?i:i+1, f.lines.length-1);
+  startEdit(target);
+  toast('已粘贴 '+parts.length+' 行');
 }
 /* 行号偏移：插入/删除时同步移动笔记锚点 */
 function shiftNotes(fromLine, delta, isDelete){
@@ -1574,6 +1752,8 @@ function shiftNotes(fromLine, delta, isDelete){
 
 /* 双击空白处进入编辑：点行号或代码区 */
 codeEl.addEventListener('dblclick', e=>{
+  const br=e.target.closest('.br');
+  if(br){ e.preventDefault(); showScope(br); return; }
   const row=e.target.closest('.line');
   if(!row) return;
   if(e.target.closest('.nb')) return;
@@ -1581,6 +1761,75 @@ codeEl.addEventListener('dblclick', e=>{
   if(editingLine===i) return;
   startEdit(i);
 });
+
+/* 单击就能编辑（正在拖选文字、或点在括号上时不触发） */
+codeEl.addEventListener('click', e=>{
+  if(editingLine>=0) return;
+  const row=e.target.closest('.line');
+  if(!row) return;
+  if(e.target.closest('.nb')||e.target.closest('.addnote')||e.target.closest('button')) return;
+  if(e.target.closest('.br')) return;
+  const sel=window.getSelection();
+  if(sel && sel.toString().trim()) return;
+  clearScope();
+  startEdit(+row.dataset.i);
+});
+
+/* ---------- 括号范围 ---------- */
+const scopeEl=document.getElementById('scope');
+function clearScope(){
+  codeEl.querySelectorAll('.br.on').forEach(b=>b.classList.remove('on'));
+  codeEl.querySelectorAll('.line.inscope').forEach(l=>l.classList.remove('inscope'));
+  scopeEl.classList.remove('on');
+}
+function showScope(el){
+  clearScope();
+  const brs=[...codeEl.querySelectorAll('.br')];
+  const idx=brs.indexOf(el);
+  if(idx<0) return;
+  const ch=el.textContent;
+  const openOf={')':'(',']':'[','}':'{','>':'<'};
+  const closeOf={'(' :')','[':']','{':'}','<':'>'};
+  let match=null;
+
+  if(closeOf[ch]){
+    let depth=0;
+    for(let k=idx;k<brs.length;k++){
+      const c=brs[k].textContent;
+      if(c===ch) depth++;
+      else if(c===closeOf[ch]) depth--;
+      if(depth===0){ match=brs[k]; break; }
+    }
+  }else if(openOf[ch]){
+    let depth=0;
+    for(let k=idx;k>=0;k--){
+      const c=brs[k].textContent;
+      if(c===ch) depth++;
+      else if(c===openOf[ch]) depth--;
+      if(depth===0){ match=brs[k]; break; }
+    }
+  }
+
+  const r=el.getBoundingClientRect();
+  if(!match){
+    scopeEl.textContent='没有配对的括号';
+    scopeEl.style.left=Math.max(8,r.left)+'px';
+    scopeEl.style.top=Math.max(8,r.top-28)+'px';
+    scopeEl.classList.add('on');
+    return;
+  }
+
+  el.classList.add('on'); match.classList.add('on');
+  const a=+el.dataset.li, b=+match.dataset.li;
+  const lo=Math.min(a,b), hi=Math.max(a,b);
+  const rows=codeEl.querySelectorAll('.line');
+  for(let k=lo;k<=hi;k++){ if(rows[k]) rows[k].classList.add('inscope'); }
+
+  scopeEl.textContent='配对 · 第 '+(lo+1)+'–'+(hi+1)+' 行（'+(hi-lo+1)+' 行）';
+  scopeEl.style.left=Math.max(8,r.left-10)+'px';
+  scopeEl.style.top=Math.max(8,r.top-30)+'px';
+  scopeEl.classList.add('on');
+}
 codeEl.addEventListener('contextmenu', e=>{
   const row=e.target.closest('.line');
   const inNote=e.target.closest('.nb');
@@ -1816,6 +2065,8 @@ document.getElementById('fileIn').addEventListener('change', ev=>{
   rd.readAsText(file);
 });
 
+document.getElementById('btnExtract').onclick = reextractCurrent;
+
 document.getElementById('btnReset').onclick=()=>{
   openModal({
     title:'重置所有数据',
@@ -1831,18 +2082,21 @@ document.getElementById('btnHelp').onclick=()=>{
   openModal({
     title:'快捷键与操作',
     body:'<div style="font-size:12.5px;line-height:2.1;color:var(--tx2)">'+
-      '<b style="color:var(--amber)">阅读</b><br>'+
-      '双击代码行 → 编辑<br>'+
-      '编辑中 Enter → 换行提交并新建下一行<br>'+
-      '编辑中 Esc → 取消；空行 Backspace → 删除该行<br>'+
-      '右键代码 → 加入函数库 / 写笔记 / 插入行 / 删行<br>'+
-      '选中函数名右键 → 加入函数库<br>'+
+      '<b style="color:var(--amber)">编辑代码</b><br>'+
+      '单击任意代码行 → 直接开始输入<br>'+
+      'Enter → 换行，并自动沿用当前缩进（行尾是 { 或 : 会自动多缩一级）<br>'+
+      'Tab → 插入 4 空格缩进<br>'+
+      '粘贴一大段代码 → 自动按行拆开，不会挤成一行<br>'+
+      '空行按 Backspace → 删掉这一行；Esc → 取消本次编辑<br>'+
+      '<b style="color:var(--amber)">看结构</b><br>'+
+      '双击括号 → 高亮配对的另一只括号，标出它圈住的行范围<br>'+
+      '拖动代码与笔记之间的竖线 → 调整两边宽度（会记住）<br>'+
+      '文件头「摘注释」→ 把当前文件里的注释整批搬到右侧<br>'+
       '<br><b style="color:var(--amber)">笔记</b><br>'+
-      '悬停行右侧 → ＋ 写笔记<br>'+
-      '笔记内 Ctrl+Enter → 完成；Esc → 退出<br>'+
+      '悬停行右侧 → ＋ 写笔记；笔记内 Ctrl+Enter / Esc 退出<br>'+
       '清空内容会自动删除这条笔记<br>'+
       '<br><b style="color:var(--amber)">函数库</b><br>'+
-      '悬停蓝词 → 看描述；Ctrl 点名字不行，右键可编辑<br>'+
+      '悬停蓝词 → 看描述；右键 → 编辑条目<br>'+
       '左上 ×N 表示出现在 N 个工程'+
       '</div>',
     okText:'知道了', cancelText:'关闭'
@@ -1868,6 +2122,49 @@ document.addEventListener('keydown', e=>{
   if(editingLine>=0) return;
   if((e.ctrlKey||e.metaKey) && e.key==='s'){ e.preventDefault(); saveAll(); toast('已保存'); }
 });
+
+/* ============================================================
+   代码 / 笔记 列宽可拖动
+   ============================================================ */
+const splitter=document.getElementById('splitter');
+let dragging=false;
+
+function clampNoteW(w){
+  const rect=codeEl.getBoundingClientRect();
+  const max=Math.max(240, Math.round(rect.width*0.62));
+  return Math.max(190, Math.min(Math.round(w), max));
+}
+function setNoteW(w, persist){
+  const v=clampNoteW(w);
+  document.documentElement.style.setProperty('--notew', v+'px');
+  if(persist){ try{ localStorage.setItem('icn-notew', String(v)); }catch(e){} }
+}
+splitter.addEventListener('mousedown', e=>{
+  e.preventDefault();
+  dragging=true; splitter.classList.add('on');
+  document.body.style.userSelect='none'; document.body.style.cursor='col-resize';
+});
+document.addEventListener('mousemove', e=>{
+  if(!dragging) return;
+  const rect=codeEl.getBoundingClientRect();
+  setNoteW(rect.right - 22 - e.clientX, false);
+});
+document.addEventListener('mouseup', ()=>{
+  if(!dragging) return;
+  dragging=false; splitter.classList.remove('on');
+  document.body.style.userSelect=''; document.body.style.cursor='';
+  const v=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--notew'))||384;
+  try{ localStorage.setItem('icn-notew', String(v)); }catch(e){}
+});
+window.addEventListener('resize', ()=>{
+  let saved=384;
+  try{ saved=parseInt(localStorage.getItem('icn-notew')||'384',10)||384; }catch(e){}
+  setNoteW(saved, false);
+});
+try{
+  const saved=parseInt(localStorage.getItem('icn-notew')||'0',10);
+  if(saved>0) setNoteW(saved, false);
+}catch(e){}
 
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();

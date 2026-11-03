@@ -1544,6 +1544,13 @@ function renderCode(){
           ev.preventDefault();
           document.execCommand('insertText', false, '    ');
         }
+        /* 上下键在行之间移动，保持光标所在的横向位置 */
+        else if((ev.key==='ArrowUp'||ev.key==='ArrowDown') && !ev.shiftKey && !ev.altKey){
+          const target=i+(ev.key==='ArrowUp'?-1:1);
+          if(target<0 || target>=f.lines.length) return;
+          ev.preventDefault();
+          commitEdit(i,false,false,null,{line:target, col:caretColumn(ed)});
+        }
         else if(ev.key==='Escape'){ ev.preventDefault(); cancelEdit(); }
         else if(ev.key==='Backspace' && ed.innerText.trim()==='' ){ ev.preventDefault(); commitEdit(i,true,true); }
       });
@@ -1730,7 +1737,19 @@ function startEdit(i, caretOffset){
   editingLine=i;
   renderCode();
 }
-function commitEdit(i, insertAfter, deleteInstead, newText){
+/* 光标在当前行里的字符偏移，用于上下移动时保持列位置 */
+function caretColumn(ed){
+  const sel=window.getSelection();
+  if(!sel || !sel.rangeCount) return 0;
+  const r=sel.getRangeAt(0);
+  if(!ed.contains(r.startContainer)) return 0;
+  const pre=document.createRange();
+  pre.selectNodeContents(ed);
+  pre.setEnd(r.startContainer, r.startOffset);
+  return pre.toString().length;
+}
+
+function commitEdit(i, insertAfter, deleteInstead, newText, gotoLine){
   if(editingLine!==i) return;
   const f=files()[cur];
   const row=codeEl.querySelector('.line[data-i="'+i+'"]');
@@ -1774,6 +1793,8 @@ function commitEdit(i, insertAfter, deleteInstead, newText){
     f.lines.splice(i+1,0,newText||'');
     shiftNotes(i+2,1,false);
     saveAll(); renderCode(); startEdit(i+1);
+  }else if(gotoLine){
+    saveAll(); renderCode(); startEdit(gotoLine.line, gotoLine.col);
   }else{
     saveAll(); renderCode();
   }
@@ -2194,6 +2215,7 @@ document.getElementById('btnHelp').onclick=()=>{
       'Tab → 插入 4 空格缩进<br>'+
       '粘贴一大段代码 → 自动按行拆开，不会挤成一行<br>'+
       '空行按 Backspace → 删掉这一行；Esc → 取消本次编辑<br>'+
+      '↑ / ↓ → 直接切到上一行 / 下一行，光标列位置保持不变<br>'+
       'Ctrl+Z / Ctrl+Shift+Z → 撤销 / 重做最近 60 步<br>'+
       '<b style="color:var(--amber)">看结构</b><br>'+
       '双击括号 → 高亮配对的另一只括号，标出它圈住的行范围<br>'+

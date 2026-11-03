@@ -142,10 +142,12 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 /* no per-line edit box: the caret is the only editing indicator */
 .line.editing{background:transparent;box-shadow:none}
 .line.editing .num{color:var(--teal)}
-.line .src,.line .src *{user-select:text;cursor:text}
+.line .src,.line .src *{user-select:text}
+/* 整行都是可点击的编辑区，不只是文字本身 */
+.line{cursor:text}
+.line .num,.addnote,.nb .h,.nb .cdel{user-select:none}
 .line .num{cursor:default}
 .nb .body,.nb .ctext,.nb .xcmt{cursor:text}
-.nb .h button,.addnote,.splitter{cursor:pointer}
 /* gutter and controls never end up inside a copied selection */
 .line .num,.addnote,.nb .h,.nb .cdel{user-select:none}
 
@@ -165,16 +167,18 @@ button:focus-visible,select:focus-visible,input:focus-visible{
   white-space:pre-wrap;overflow-wrap:anywhere;outline:none;min-height:20px}
 .nb .body:empty:before{content:attr(data-ph);content:"写下批注…";color:color-mix(in srgb,var(--note-ink) 55%,transparent)}
 .nb:focus-within{box-shadow:none}
-.nb.cmt{background:var(--com-bg);border-left:3px solid #9db3c6;padding:2px 12px;border-radius:0 8px 8px 0}
+.nb.cmt{background:var(--com-bg);border-left:3px solid #9db3c6;
+  padding:2px 30px 2px 10px;border-radius:0 8px 8px 0}
 .nb.cmt .ctext{color:var(--com-ink);font-size:12.5px;line-height:20px}
 .nb.moved{border-left-color:var(--teal);background:color-mix(in srgb,var(--teal) 8%,var(--paper))}
 .nb.dup{border-left-color:var(--rose);background:color-mix(in srgb,var(--rose) 8%,var(--paper))}
 
-/* hover toolbar sits inside the card, never over the code */
+/* hover toolbar sits inside the card but never eats text clicks */
 .nb .h{position:absolute;right:5px;top:50%;transform:translateY(-50%);height:auto;margin:0;
   display:flex;align-items:center;gap:5px;padding:2px 3px;border-radius:6px;
   background:inherit;opacity:0;pointer-events:none;transition:opacity .12s}
-.nb:hover .h,.nb:focus-within .h{opacity:1;pointer-events:auto}
+.nb:hover .h,.nb:focus-within .h{opacity:1}
+.nb .h button,.nb .h .pinbtn{pointer-events:auto}
 .nb .h>.tag,.nb .h>.lnk,.nb .st{display:none}
 .nb .h .tools{display:flex;align-items:center;gap:5px;margin:0}
 .nb .h button{font-size:10.5px;line-height:1.6;padding:1px 6px;border-radius:5px;
@@ -191,8 +195,9 @@ button:focus-visible,select:focus-visible,input:focus-visible{
   border-top:1px dashed color-mix(in srgb,var(--accent) 35%,transparent);
   font-size:11.5px;line-height:1.7;color:var(--com-ink);white-space:pre-wrap}
 .nb .cdel{position:absolute;right:6px;top:50%;transform:translateY(-50%);opacity:0;
-  font-size:12px;color:var(--com-ink);background:inherit;padding:0 4px;border-radius:5px}
-.nb.cmt:hover .cdel,.nb.cmt:focus-within .cdel{opacity:.8}
+  font-size:12px;color:var(--com-ink);background:inherit;padding:0 4px;border-radius:5px;
+  pointer-events:none}
+.nb.cmt:hover .cdel,.nb.cmt:focus-within .cdel{opacity:.8;pointer-events:auto}
 .nb .cdel:hover{color:var(--rose)}
 
 /* the "+" lives in the gutter, keeps rows a constant height */

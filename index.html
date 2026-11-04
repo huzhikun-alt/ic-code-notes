@@ -353,9 +353,9 @@
     .splitter{left:calc(100% - var(--notew,384px) - 21px)}
   }
 </style>
-<link rel="stylesheet" href="ui-refresh.css?v=20261105f">
-<link rel="stylesheet" href="presets.css?v=20261105f">
-<link rel="stylesheet" href="ai.css?v=20261105f">
+<link rel="stylesheet" href="ui-refresh.css?v=20261105g">
+<link rel="stylesheet" href="presets.css?v=20261105g">
+<link rel="stylesheet" href="ai.css?v=20261105g">
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><defs><symbol id="i-sparkles" viewBox="0 0 24 24">
@@ -537,7 +537,7 @@
     <div class="sep"></div>
     <button role="menuitem" id="btnReset" class="dang"><svg class="ic"><use href="#i-rotate-ccw"/></svg>重置数据</button>
     <div class="sep"></div>
-    <div class="ver" id="buildVer">构建 20261105-0210</div>
+    <div class="ver" id="buildVer">构建 20261105-0240</div>
   </div>
 </div>
 
@@ -633,7 +633,7 @@
 <div id="mask"><div class="dlg" id="dlgBody"></div></div>
 <div id="toast"></div>
 
-<script src="indent.js?v=20261105f"></script>
+<script src="indent.js?v=20261105g"></script>
 <script>
 /* ============================================================
    数据
@@ -2570,7 +2570,7 @@ try{
    撤销 / 重做
    每次改动代码或笔记之前拍一张快照，Ctrl+Z 回到上一张。
    ============================================================ */
-const HIST={undo:[],redo:[],limit:50};
+const HIST={undo:[],redo:[],limit:60};
 
 function takeSnap(label){
   if(!hasFile()) return null;
@@ -2630,19 +2630,34 @@ function updateHistBtns(){
 document.getElementById('btnUndo').onclick=doUndo;
 document.getElementById('btnRedo').onclick=doRedo;
 document.addEventListener('keydown',e=>{
-  const ae=document.activeElement;
-  const typing = ae && (ae.isContentEditable || ae.tagName==='INPUT' || ae.tagName==='TEXTAREA');
-  if(!(e.ctrlKey||e.metaKey) || typing) return;
+  if(!(e.ctrlKey||e.metaKey)) return;
   const k=e.key.toLowerCase();
-  if(k==='z'){ e.preventDefault(); e.shiftKey?doRedo():doUndo(); }
-  else if(k==='y'){ e.preventDefault(); doRedo(); }
+  if(k!=='z' && k!=='y') return;
+
+  const ae=document.activeElement;
+  const inEditor = ae && (ae.classList.contains('src') || ae.classList.contains('body') ||
+                          ae.classList.contains('ctext') || ae.classList.contains('rg-body'));
+  const inOtherField = ae && (ae.tagName==='INPUT' || ae.tagName==='TEXTAREA') && !inEditor;
+
+  if(inOtherField) return;                      // 输入框里交给浏览器原生撤销
+
+  if(inEditor && ae.blur){
+    /* 先提交正在编辑的这一行，再撤销 —— 这样“撤销”就是你刚做的那次改动 */
+    e.preventDefault();
+    ae.blur();
+    setTimeout(()=>{ (k==='y'||e.shiftKey) ? doRedo() : doUndo(); }, 30);
+    return;
+  }
+
+  e.preventDefault();
+  if(k==='y' || e.shiftKey) doRedo(); else doUndo();
 });
 
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();
 </script>
-<script src="ui-refresh.js?v=20261105f"></script>
-<script src="ai.js?v=20261105f"></script>
-<script src="rowselection.js?v=20261105f"></script>
+<script src="ui-refresh.js?v=20261105g"></script>
+<script src="ai.js?v=20261105g"></script>
+<script src="rowselection.js?v=20261105g"></script>
 </body>
 </html>

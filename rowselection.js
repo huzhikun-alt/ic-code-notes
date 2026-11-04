@@ -122,11 +122,11 @@
   codeEl.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
     if (e.target.closest('.nb') || e.target.closest('button')) return;
+    /* 只有行号区域才算“按行拖选”，正文里按下就交给浏览器做文字选择 */
     const onNum = !!e.target.closest('.num');
-    const onBlank = !e.target.closest('.src');
-    if (!onNum && !onBlank) return;
+    if (!onNum) return;
 
-    const idx = onNum ? rowIndexOf(e.target) : rowAtY(e.clientY);
+    const idx = rowIndexOf(e.target);
     if (idx < 1) return;
 
     e.preventDefault();

@@ -3,11 +3,18 @@ $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
-$listener.Start()
+
+try {
+  $listener.Start()
+} catch {
+  Write-Host "[ERROR] Cannot listen on port $Port. Close the other program or change the port." -ForegroundColor Red
+  exit 1
+}
+
 Write-Host ""
-Write-Host "  IC 代码笔记 · 本地服务已启动" -ForegroundColor Green
+Write-Host "  IC Code Notes - local server" -ForegroundColor Green
 Write-Host "  http://127.0.0.1:$Port/" -ForegroundColor Cyan
-Write-Host "  关闭这个窗口即停止服务" -ForegroundColor DarkGray
+Write-Host "  Close this window to stop." -ForegroundColor DarkGray
 Write-Host ""
 
 while ($true) {
@@ -18,7 +25,10 @@ while ($true) {
     $stream.WriteTimeout = 5000
     $reader = [System.IO.StreamReader]::new($stream, [System.Text.Encoding]::ASCII)
     $requestLine = $reader.ReadLine()
-    while ($true) { $h = $reader.ReadLine(); if ([string]::IsNullOrEmpty($h)) { break } }
+    while ($true) {
+      $h = $reader.ReadLine()
+      if ([string]::IsNullOrEmpty($h)) { break }
+    }
 
     if ([string]::IsNullOrEmpty($requestLine)) { $client.Close(); continue }
 
@@ -28,7 +38,7 @@ while ($true) {
     $relative = [System.Uri]::UnescapeDataString($target.TrimStart('/')).Replace('/', '\')
     $full = Join-Path $root $relative
 
-    if ((Test-Path $full -PathType Leaf) -and ($full.StartsWith($root))) {
+    if ((Test-Path $full -PathType Leaf) -and $full.StartsWith($root)) {
       $bytes = [System.IO.File]::ReadAllBytes($full)
       $ext = [System.IO.Path]::GetExtension($full).ToLower()
       $mime = switch ($ext) {
@@ -52,7 +62,6 @@ while ($true) {
       $stream.Write($msg, 0, $msg.Length)
     }
   } catch {
-    # 单个请求出错不影响服务
   } finally {
     if ($client) { $client.Close() }
   }

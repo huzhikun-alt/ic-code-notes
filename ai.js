@@ -208,93 +208,270 @@
     return el;
   }
 
-  function runAction(act){
-    if(busy) return;
-    if(!hasFile()){ toast('先打开一个文件'); return; }
-    if(act === 'cfg'){ openSettings(); return; }
+  /* ---------------- 真实 API 调用 ---------------- */
+  const endpoint = () => {
+    const base = (cfg().base || '').replace(/\/+$/, '');
+    if (!base) return '';
+    return /\/chat\/completions$/.test(base) ? base : base + '/chat/completions';
+  };
+
+  async function apiChat(messages, opts = {}) {
+    const c = cfg();
+    const url = endpoint();
+    if (!url) throw new Error('Base URL 未填写');
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), opts.timeout || 60000);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        signal: ctrl.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(c.key ? { Authorization: 'Bearer ' + c.key } : {})
+        },
+        body: JSON.stringify({
+          model: c.model,
+          temperature: typeof opts.temp === 'number' ? opts.temp : (c.temp ?? 0.3),
+          max_tokens: opts.maxTokens || 1600,
+          stream: false,
+          messages
+        })
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error('HTTP ' + res.status + (body ? ' · ' + body.slice(0, 180) : ''));
+      }
+      const data = await res.json();
+      return (data && data.choices && data.choices[0] && data.choices[0].message &&
+              data.choices[0].message.content) || '';
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function testConnection() {
+    const c = cfg();
+    if (!c.base) return { ok: false, msg: 'Base URL 未填写' };
+    const base = c.base.replace(/\/+$/, '');
+    const t0 = performance.now();
+    const auth = c.key ? { Authorization: 'Bearer ' + c.key } : {};
+
+    // 1) 先试 /models（最轻，多数兼容网关都实现）
+    try {
+      const r = await fetch(base + '/models', { headers: auth });
+      if (r.ok) {
+        const j = await r.json().catch(() => null);
+        const n = j && Array.isArray(j.data) ? j.data.length : 0;
+        return { ok: true, ms: Math.round(performance.now() - t0),
+                 msg: '连接成功' + (n ? ' · 可用模型 ' + n + ' 个' : '') };
+      }
+      if (r.status !== 404 && r.status !== 405) {
+        const t = await r.text().catch(() => '');
+        return { ok: false, ms: Math.round(performance.now() - t0),
+                 msg: 'HTTP ' + r.status + (t ? ' · ' + t.slice(0, 120) : '（若是 401/403，检查 Key）') };
+      }
+    } catch (e) {
+      // 网络层错误：继续用补全接口再确认一次
+    }
+
+    // 2) 再用一次极小的补全请求确认
+    try {
+      const url = /\/chat\/completions$/.test(base) ? base : base + '/chat/completions';
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...auth },
+        body: JSON.stringify({
+          model: c.model, max_tokens: 1, temperature: 0,
+          messages: [{ role: 'user', content: 'ping' }]
+        })
+      });
+      const ms = Math.round(performance.now() - t0);
+      if (!res.ok) {
+        const t = await res.text().catch(() => '');
+        return { ok: false, ms, msg: 'HTTP ' + res.status + (t ? ' · ' + t.slice(0, 140) : '') };
+      }
+      return { ok: true, ms, msg: '连接成功 · 模型 ' + c.model + ' 可用' };
+    } catch (e) {
+      return { ok: false, ms: Math.round(performance.now() - t0),
+               msg: '请求失败：' + (e.name === 'AbortError' ? '超时' : e.message) +
+                    '（常见原因：CORS 未放行 http://127.0.0.1:8710，或地址不可达）' };
+    }
+  }
+
+  /* ---------------- 提示词 ---------------- */
+  function numberedSource(lines, from, to) {
+    return lines.slice(from - 1, to)
+      .map((l, i) => String(from + i).padStart(4, ' ') + ' | ' + l)
+      .join('\n');
+  }
+
+  const SYS = '你是资深的 IC / EDA 代码阅读助手，精通 Verilog/SystemVerilog、Perl、Python。' +
+    '你的任务是为给定的代码片段写出精确的逐段批注。要求：' +
+    '1) 只输出 JSON 数组，不要任何解释文字、不要 Markdown 代码块；' +
+    '2) 每项格式 {"from":整数,"to":整数,"text":"说明"}，from/to 使用我给的原始行号（含两端）；' +
+    '3) text 必须具体：写清这段在做什么运算/判断、涉及哪些信号或变量、时序关系（是否寄存、复位行为）、以及设计意图；' +
+    '4) 禁止写"这段代码实现了功能""这是一段逻辑"这类空话；' +
+    '5) 段落粒度按语义划分：一个模块头、一个 always 块、一个 case 分支组、一个函数体各成一段；' +
+    '6) 每段 1-3 句，中文。';
+
+  function buildUserPrompt(lang, from, to, code, extra) {
+    return '语言：' + lang + '\n代码（行号 | 内容）：\n' + code +
+      (extra ? '\n\n额外要求：' + extra : '') +
+      '\n\n请为 ' + from + '-' + to + ' 范围内的代码输出批注 JSON 数组。';
+  }
+
+  function parseJsonArray(text) {
+    if (!text) return null;
+    let t = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    const s = t.indexOf('['), e = t.lastIndexOf(']');
+    if (s >= 0 && e > s) t = t.slice(s, e + 1);
+    try {
+      const arr = JSON.parse(t);
+      if (!Array.isArray(arr)) return null;
+      return arr
+        .map(x => ({ from: parseInt(x.from, 10), to: parseInt(x.to, 10), text: String(x.text || '').trim() }))
+        .filter(x => x.from > 0 && x.to >= x.from && x.text);
+    } catch (e) { return null; }
+  }
+
+  /* ---------------- 动作 ---------------- */
+  function runAction(act) {
+    if (busy) return;
+    if (!hasFile()) { toast('先打开一个文件'); return; }
+    if (act === 'cfg') { openSettings(); return; }
+    if (act === 'test') { openSettings(); return; }
+
+    const c = cfg();
+    if (!c.key) {
+      toast('还没有接入 API');
+      chatSay('ai', '<div class="ai-result"><p class="dim">还没有接入 API。' +
+        '点「接入设置」填写内网 Base URL 与 Key，填完可以先用「测试连接」验证是否通。</p></div>');
+      return;
+    }
+
     const f = files()[cur];
     const sel = act === 'sel' ? selRange() : null;
-    if(act === 'sel' && !sel){ toast('先选中几行代码'); return; }
+    if (act === 'sel' && !sel) { toast('先选中几行代码'); return; }
+    const from = sel ? sel.from : 1;
+    const to = sel ? sel.to : f.lines.length;
 
     busy = true;
-    const c = cfg();
-    const scope = act === 'file' ? `${f.lines.length} 行` : `${sel.to-sel.from+1} 行`;
-    const msg = chatSay('user', act === 'explain'
-      ? `解释 ${sel ? sel.from+'–'+sel.to+' 行' : '当前文件'}`
-      : `为 ${scope} 生成批注`);
-    const out = chatSay('ai', '<span class="typing"><svg class="ic spin"><use href="#i-loader-circle"/></svg>生成中…</span>');
+    chatSay('user', (act === 'explain' ? '解释 ' : '注释 ') + from + '–' + to + ' 行');
+    const out = chatSay('ai', '<span class="typing"><svg class="ic spin"><use href="#i-loader-circle"/></svg>请求中…</span>');
 
-    setTimeout(() => {
-      busy = false;
-      const lines = f.lines;
-      if(act === 'explain'){
-        out.innerHTML = '<div class="ai-result"><p>这段代码做的是：把输入按 opcode 分流计算，再打一拍输出。</p><p class="dim">（演示模式：未接入 API，内容为固定示例）</p></div>';
-        return;
-      }
-      const items = mockAnnotate(lines, f.lang);
-      const filtered = sel ? items.filter(x => x.to >= sel.from && x.from <= sel.to) : items;
-      const list = (filtered.length ? filtered : [{from:sel?sel.from:1, to:sel?sel.to:lines.length, text:'这是一段值得记录的代码。'}]);
-      out.innerHTML =
-        '<div class="ai-result">' +
-        '<div class="ai-sum">识别出 ' + list.length + ' 段，可整批写入批注：</div>' +
-        list.map(x => '<div class="ai-item"><span class="rg-badge sm">'+x.from+'–'+x.to+'</span><span>'+esc(x.text)+'</span></div>').join('') +
-        '<div class="ai-result-acts">' +
-        '<button class="btn pri" id="aiAccept">全部写入</button>' +
-        '<button class="btn" id="aiAgain">重试</button>' +
-        (act==='file' ? '' : '<span class="dim tiny">仅写入选中范围内的段落</span>') +
-        '</div></div>';
-      const accept = out.querySelector('#aiAccept');
-      if(accept) accept.onclick = () => {
-        let n = 0;
-        list.forEach(x => { if(addRange(x.from, x.to, x.text, 'ai')) n++; });
-        toast('已写入 ' + n + ' 条 AI 批注（待确认）');
-        out.querySelector('.ai-result').innerHTML = '<p class="dim">已写入 ' + n + ' 条，可在代码区审阅。</p>';
-      };
-      const again = out.querySelector('#aiAgain');
-      if(again) again.onclick = () => { out.remove(); runAction(act); };
-    }, 650);
+    const code = numberedSource(f.lines, from, to);
+    const messages = act === 'explain'
+      ? [{ role: 'system', content: '你是 IC 代码阅读助手，用中文简洁解释代码的作用、关键信号与时序，不要复述语法。' },
+         { role: 'user', content: '语言：' + f.lang + '\n代码（行号 | 内容）：\n' + code + '\n\n请解释这段代码在做什么。' }]
+      : [{ role: 'system', content: SYS },
+         { role: 'user', content: buildUserPrompt(f.lang, from, to, code) }];
+
+    apiChat(messages, { maxTokens: act === 'explain' ? 800 : 1800 })
+      .then(text => {
+        busy = false;
+        if (act === 'explain') {
+          out.innerHTML = '<div class="ai-result"><p></p></div>';
+          out.querySelector('p').textContent = text.trim();
+          return;
+        }
+        const items = parseJsonArray(text);
+        if (!items || !items.length) {
+          out.innerHTML = '<div class="ai-result"><div class="ai-sum">模型没有返回结构化结果，原文如下：</div>' +
+            '<pre class="ai-raw"></pre></div>';
+          out.querySelector('.ai-raw').textContent = text.slice(0, 1200);
+          return;
+        }
+        out.innerHTML =
+          '<div class="ai-result">' +
+          '<div class="ai-sum">识别出 ' + items.length + ' 段：</div>' +
+          items.map(x => '<div class="ai-item"><span class="rg-badge sm">' + x.from + '–' + x.to + '</span>' +
+            '<span>' + esc(x.text) + '</span></div>').join('') +
+          '<div class="ai-result-acts">' +
+          '<button class="btn pri" id="aiAccept">全部写入</button>' +
+          '<button class="btn" id="aiAgain">重试</button></div></div>';
+        out.querySelector('#aiAccept').onclick = () => {
+          let n = 0;
+          items.forEach(x => { if (addRange(x.from, x.to, x.text, 'ai')) n++; });
+          toast('已写入 ' + n + ' 条 AI 批注（待确认）');
+          out.querySelector('.ai-result').innerHTML = '<p class="dim">已写入 ' + n + ' 条，可在代码区审阅。</p>';
+        };
+        out.querySelector('#aiAgain').onclick = () => { out.remove(); runAction(act); };
+      })
+      .catch(err => {
+        busy = false;
+        out.innerHTML = '<div class="ai-result"><div class="ai-err"></div></div>';
+        out.querySelector('.ai-err').textContent = '请求失败：' + err.message;
+      });
   }
 
   /* ---------------- 设置弹窗 ---------------- */
-  function openSettings(){
+  function openSettings() {
     const c = cfg();
     openModal({
       title: 'AI 接入设置',
-      sub: 'Key 只保存在本机浏览器里，不会上传。留空则使用演示模式。',
+      sub: '配置只保存在本机浏览器。填好后先点「测试连接」确认能通，再保存。',
       body:
         '<div class="fld"><label>服务商</label><div class="choices" id="aiProv">' +
-          [['deepseek','DeepSeek'],['openai','OpenAI'],['custom','自定义']].map(([k,n]) =>
-            '<button data-p="'+k+'" class="'+(k==='deepseek'?'on':'')+'">'+n+'</button>').join('') +
+          [['deepseek', 'DeepSeek'], ['openai', 'OpenAI'], ['custom', '自定义 / 内网']].map(([k, n]) =>
+            '<button data-p="' + k + '" class="' + (k === 'custom' ? 'on' : '') + '">' + n + '</button>').join('') +
         '</div></div>' +
-        '<div class="fld"><label>Base URL</label><input id="aiBase" value="'+esc(c.base||'https://api.deepseek.com/v1')+'"></div>' +
-        '<div class="fld"><label>API Key</label><input id="aiKey" type="password" value="'+esc(c.key||'')+'" placeholder="sk-..."></div>' +
-        '<div class="fld"><label>模型</label><input id="aiModel" value="'+esc(c.model||'deepseek-chat')+'"></div>' +
+        '<div class="fld"><label>Base URL（不要带结尾斜杠）</label>' +
+          '<input id="aiBase" placeholder="http://10.0.0.8:8000/v1" value="' + esc(c.base || '') + '"></div>' +
+        '<div class="fld"><label>API Key</label>' +
+          '<input id="aiKey" type="password" placeholder="sk-... / 内网 token" value="' + esc(c.key || '') + '"></div>' +
+        '<div class="fld"><label>模型名</label>' +
+          '<input id="aiModel" placeholder="deepseek-chat" value="' + esc(c.model || '') + '"></div>' +
         '<div class="fld"><label>允许 AI 生成代码补丁</label><div class="choices" id="aiEdit">' +
-          '<button data-v="0" class="'+(c.allowEdit?'':'on')+'">只写批注</button>' +
-          '<button data-v="1" class="'+(c.allowEdit?'on':'')+'">可生成补丁（需确认）</button>' +
-        '</div></div>',
+          '<button data-v="0" class="' + (c.allowEdit ? '' : 'on') + '">只写批注</button>' +
+          '<button data-v="1" class="' + (c.allowEdit ? 'on' : '') + '">可生成补丁（需确认）</button>' +
+        '</div></div>' +
+        '<div class="ai-test"><button class="btn" id="aiTest">测试连接</button>' +
+        '<span id="aiTestMsg" class="ai-testmsg">尚未测试</span></div>',
       okText: '保存',
-      onOk(){
-        const next = {
-          base: document.getElementById('aiBase').value.trim(),
-          key: document.getElementById('aiKey').value.trim(),
-          model: document.getElementById('aiModel').value.trim(),
-          temp: c.temp,
-          allowEdit: document.querySelector('#aiEdit button.on').dataset.v === '1'
-        };
+      onOk() {
+        const next = readForm();
         store.set('icn-ai-cfg', next);
-        paintCtx(); toast(next.key ? '已接入，可用真实模型' : '已保存（未填 Key，仍为演示模式）');
+        paintCtx();
+        toast(next.key ? '已保存配置' : '已保存，但缺少 Key，AI 功能不可用');
         return true;
       }
     });
+
+    function readForm() {
+      return {
+        base: document.getElementById('aiBase').value.trim(),
+        key: document.getElementById('aiKey').value.trim(),
+        model: document.getElementById('aiModel').value.trim(),
+        temp: c.temp ?? 0.3,
+        allowEdit: document.querySelector('#aiEdit button.on').dataset.v === '1'
+      };
+    }
+
     setTimeout(() => {
       document.querySelectorAll('#aiProv button').forEach(b => b.onclick = () => {
-        $$('#aiProv button').forEach(x => x.classList.toggle('on', x === b));
-        const map = { deepseek:'https://api.deepseek.com/v1', openai:'https://api.openai.com/v1' };
-        if(map[b.dataset.p]) document.getElementById('aiBase').value = map[b.dataset.p];
+        document.querySelectorAll('#aiProv button').forEach(x => x.classList.toggle('on', x === b));
+        const map = { deepseek: 'https://api.deepseek.com/v1', openai: 'https://api.openai.com/v1' };
+        if (map[b.dataset.p]) {
+          document.getElementById('aiBase').value = map[b.dataset.p];
+          if (!document.getElementById('aiModel').value)
+            document.getElementById('aiModel').value = b.dataset.p === 'openai' ? 'gpt-4o-mini' : 'deepseek-chat';
+        }
       });
       document.querySelectorAll('#aiEdit button').forEach(b => b.onclick = () =>
-        $$('#aiEdit button').forEach(x => x.classList.toggle('on', x === b)));
+        document.querySelectorAll('#aiEdit button').forEach(x => x.classList.toggle('on', x === b)));
+
+      document.getElementById('aiTest').onclick = async () => {
+        const msg = document.getElementById('aiTestMsg');
+        const btn = document.getElementById('aiTest');
+        store.set('icn-ai-cfg', readForm());     // 测试用当前表单值
+        msg.textContent = '测试中…'; msg.className = 'ai-testmsg';
+        btn.disabled = true;
+        const r = await testConnection();
+        btn.disabled = false;
+        msg.textContent = (r.ok ? '✓ ' : '✗ ') + r.msg + (r.ms ? ' （' + r.ms + 'ms）' : '');
+        msg.className = 'ai-testmsg ' + (r.ok ? 'ok' : 'bad');
+        if (r.ok) paintCtx();
+      };
     }, 30);
   }
 

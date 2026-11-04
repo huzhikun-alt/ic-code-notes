@@ -27,6 +27,8 @@
 | API Key | 内网 Key（只存在你本机 localStorage） |
 | 模型 | 内网部署的模型名 |
 
+填好后点 **「测试连接」** 按钮：它会先试 `GET {BaseURL}/models`，不行再发一次 1 token 的补全请求，能立刻告诉你是成功、Key 错、还是 CORS 被拦。
+
 页面按 **OpenAI Chat Completions 兼容格式**发请求：`POST {BaseURL}/chat/completions`。
 
 如果你的网关路径不同，可以直接把完整地址填在 Base URL 里（不要带结尾斜杠）。

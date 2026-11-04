@@ -1,33 +1,43 @@
 @echo off
 chcp 65001 >nul
-setlocal
+setlocal enabledelayedexpansion
 cd /d "%~dp0"
 set PORT=8710
+set "URL=http://127.0.0.1:%PORT%/"
 
 echo.
-echo   IC 代码笔记 - 本地启动
+echo   IC Code Notes - local launcher
 echo   ----------------------------------------
-echo   目录: %cd%
-echo   地址: http://127.0.0.1:%PORT%/
-echo   关闭本窗口即停止服务
+echo   dir : %cd%
+echo   url : %URL%
+echo   close this window to stop the server
 echo.
 
-rem 先尝试用 Python 起一个静态服务（最省事，且带 no-store 缓存头）
-where python >nul 2>nul
-if %errorlevel%==0 (
-  start "" cmd /c "timeout /t 2 >nul & start http://127.0.0.1:%PORT%/"
-  python -m http.server %PORT% --bind 127.0.0.1
-  goto :eof
+set "PY="
+where py >nul 2>nul && set "PY=py -3"
+if not defined PY ( where python >nul 2>nul && set "PY=python" )
+if not defined PY ( where python3 >nul 2>nul && set "PY=python3" )
+
+if defined PY (
+  echo   [1/2] starting python static server...
+  start "" cmd /c "timeout /t 2 >nul & start %URL%"
+  %PY% -m http.server %PORT% --bind 127.0.0.1
+  goto done
 )
 
-rem 没有 Python 时用内置 PowerShell 服务（无需安装任何东西）
 where powershell >nul 2>nul
 if %errorlevel%==0 (
-  start "" cmd /c "timeout /t 2 >nul & start http://127.0.0.1:%PORT%/"
+  echo   [1/2] python not found, using built-in powershell server...
+  start "" cmd /c "timeout /t 2 >nul & start %URL%"
   powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0serve.ps1" -Port %PORT%
-  goto :eof
+  goto done
 )
 
-echo   没有找到 Python 或 PowerShell。
-echo   你也可以直接双击 index.html（但调用内网 API 可能被浏览器 CORS 拦截）。
+echo   [ERROR] neither Python nor PowerShell was found.
+echo   You can still double-click index.html, but an intranet API may block CORS.
+echo.
+
+:done
+echo.
+echo   server stopped.
 pause

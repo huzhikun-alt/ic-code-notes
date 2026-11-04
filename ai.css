@@ -223,3 +223,34 @@ html[data-note-mode="side"] .nb:has(.achip){padding-right:140px}
 .nb .h{display:none}
 .nb .h:has(.achip){display:flex}
 .nb .h:empty{display:none}
+
+/* ===== 左侧“函数快捷入口”整块重排，跟站内其它导航对齐 ===== */
+.nav-functions{border-top:1px solid var(--edge);margin:16px 8px 0;padding-top:8px}
+.nav-functions>summary{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:8px;
+  font-size:12.5px;font-weight:600;color:var(--tx2);cursor:pointer}
+.nav-functions>summary::before,.nav-functions>summary::marker{content:none;display:none}
+.nav-functions>summary::-webkit-details-marker{display:none}
+.nav-functions>summary .ic{width:15px;height:15px;color:var(--dim);flex:none;
+  transition:transform .18s cubic-bezier(.4,0,.2,1)}
+.nav-functions[open]>summary .ic{transform:rotate(90deg);color:var(--accent)}
+.nav-functions>summary:hover{background:var(--surface);color:var(--ink)}
+
+.fnsect{padding:6px 0 0}
+.fnhead{display:flex;align-items:center;gap:8px;padding:4px 10px 6px}
+.fnhead .h{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink)}
+.fnhead .g{font:9.5px var(--mono);font-weight:400;color:var(--muted);
+  border:1px solid var(--edge);border-radius:5px;padding:1px 5px;background:var(--surface-soft)}
+.fnhead .all{margin-left:auto;font-size:11px;color:var(--tx2);border:1px solid var(--edge);
+  border-radius:6px;padding:2px 8px;background:transparent}
+.fnhead .all:hover{border-color:var(--line3);color:var(--ink)}
+.searchwrap{padding:0 10px 8px}
+.fnitem{display:flex;align-items:center;gap:8px;padding:7px 10px;margin:1px 6px;
+  border-radius:7px;font-size:12.5px;color:var(--tx2);cursor:pointer}
+.fnitem .ic{width:14px;height:14px;color:var(--muted);flex:none}
+.fnitem:hover{background:var(--surface);color:var(--ink)}
+.fnitem .fname{color:var(--ink);font-family:var(--mono);font-size:12px}
+.fnitem .fcount{margin-left:auto;font:9.5px var(--mono);color:var(--muted);
+  background:var(--surface-soft);border:1px solid var(--edge);border-radius:5px;padding:0 5px}
+.fnitem .xp{font:8.5px var(--mono);color:var(--teal);border:1px solid color-mix(in srgb,var(--teal) 35%,transparent);
+  border-radius:4px;padding:0 4px;background:color-mix(in srgb,var(--teal) 8%,transparent)}
+.catcap{font:9.5px var(--mono);letter-spacing:.08em;color:var(--dim);padding:8px 12px 3px}

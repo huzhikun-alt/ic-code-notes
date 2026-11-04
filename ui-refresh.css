@@ -95,8 +95,6 @@ button:focus-visible,select:focus-visible,input:focus-visible{
 .nav-functions>summary{list-style:none;cursor:pointer;padding:8px 10px;border-radius:7px;
   font-size:10.5px;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase}
 .nav-functions>summary::-webkit-details-marker{display:none}
-.nav-functions>summary:before{content:"▸";font-size:9px;margin-right:7px;color:var(--dim)}
-.nav-functions[open]>summary:before{content:"▾"}
 .nav-functions>summary:hover{background:var(--surface);color:var(--ink)}
 .nav-functions .fnsect{border:0;margin:2px 0 0;padding:0}
 .nav-functions .fnhead,.nav-functions .searchwrap{padding-left:10px;padding-right:10px}

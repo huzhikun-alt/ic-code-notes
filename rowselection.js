@@ -122,11 +122,9 @@
   codeEl.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
     if (e.target.closest('.nb') || e.target.closest('button')) return;
-    /* 只有行号区域才算“按行拖选”，正文里按下就交给浏览器做文字选择 */
-    const onNum = !!e.target.closest('.num');
-    if (!onNum) return;
-
-    const idx = rowIndexOf(e.target);
+    /* 代码区里任意位置按下都开始“按行拖选”，像 diff 视图那样一拖就选整行 */
+    if (e.target.closest('.src') && e.target.isContentEditable) return;  // 正在编辑的那一行仍可选中文字
+    const idx = rowIndexOf(e.target) || rowAtY(e.clientY);
     if (idx < 1) return;
 
     e.preventDefault();
@@ -180,5 +178,28 @@
   }
 
   window.__rowSelection = () => (hasSel() ? { from, to } : null);
+  window.__setRowSelection = (a, b) => { from = a; to = b; paintRows(); };
+  /* 从“正在编辑的那一行”开始拖时，由 multiselect.js 调用，切到按行拖选 */
+  window.__beginRowDrag = y => {
+    const idx = rowAtY(y);
+    if (idx < 1) return;
+    dragging = true;
+    anchor = idx;
+    selectRow(idx, false);
+  };
+
+  /* 选中行后 Ctrl+C 复制原文 */
+  document.addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'c') return;
+    if (!hasSel()) return;
+    const ae = document.activeElement;
+    if (ae && (ae.isContentEditable || ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return;
+    const lines = files()[cur].lines.slice(from - 1, to);
+    e.preventDefault();
+    navigator.clipboard.writeText(lines.join('\n')).then(
+      () => toast('已复制 ' + (to - from + 1) + ' 行'),
+      () => {}
+    );
+  });
   window.__clearRowSelection = clearRows;
 })();

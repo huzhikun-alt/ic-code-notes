@@ -210,9 +210,12 @@
 
   /* ---------------- 真实 API 调用 ---------------- */
   const endpoint = () => {
-    const base = (cfg().base || '').replace(/\/+$/, '');
+    const c = cfg();
+    if (c.full && c.full.trim()) return c.full.trim();   // 用户直接给了完整地址
+    const base = (c.base || '').replace(/\/+$/, '');
     if (!base) return '';
-    return /\/chat\/completions$/.test(base) ? base : base + '/chat/completions';
+    if (/\/completions$/.test(base)) return base;
+    return base + '/chat/completions';
   };
 
   async function apiChat(messages, opts = {}) {
@@ -259,6 +262,50 @@
     } finally {
       clearTimeout(timer);
     }
+  }
+
+
+  /* ---------------- 连接诊断：逐步定位到底是哪一步返回了网页 ---------------- */
+  async function diagnose() {
+    const c = cfg();
+    const base = (c.base || '').replace(/\/+$/, '');
+    if (!base) return [{ step: 'Base URL', status: '-', ct: '-', ms: 0, head: '未填写' }];
+    const url = /\/chat\/completions$/.test(base) ? base : base + '/chat/completions';
+    const auth = c.key ? { Authorization: 'Bearer ' + c.key } : {};
+    const rows = [];
+
+    const probe = async (step, run) => {
+      const t0 = performance.now();
+      try {
+        const r = await run();
+        const txt = await r.text().catch(() => '');
+        const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+        const html = /html/.test(ct.toLowerCase()) || /^\s*</.test(txt);
+        rows.push({
+          step, status: r.status, ct: ct || '-', ms: Math.round(performance.now() - t0),
+          head: (html ? '[网页] ' : '') + txt.slice(0, 90).replace(/\s+/g, ' '),
+          html
+        });
+      } catch (e) {
+        rows.push({ step, status: '失败', ct: '-', ms: Math.round(performance.now() - t0),
+                    head: e.name === 'AbortError' ? '超时' : e.message, html: false });
+      }
+    };
+
+    await probe('GET ' + base + '/models', () =>
+      fetch(base + '/models', { headers: auth }));
+
+    await probe('POST 最小补全（1 token）', () =>
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...auth },
+        body: JSON.stringify({ model: c.model, max_tokens: 1, temperature: 0,
+          messages: [{ role: 'user', content: 'ping' }] }) }));
+
+    await probe('POST 短问答（200 tokens）', () =>
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...auth },
+        body: JSON.stringify({ model: c.model, max_tokens: 200, temperature: 0.3,
+          messages: [{ role: 'user', content: '用一句话说明寄存器的作用' }] }) }));
+
+    return rows;
   }
 
   async function testConnection() {
@@ -314,6 +361,28 @@
                msg: '请求失败：' + (e.name === 'AbortError' ? '超时' : e.message) +
                     '（常见原因：CORS 未放行 http://127.0.0.1:8710，或地址不可达）' };
     }
+  }
+
+
+  function conclude(rows) {
+    const models = rows[0], tiny = rows[1], shortq = rows[2];
+    if (models && models.html && tiny && tiny.html) {
+      return '两个接口都返回网页，Base URL 基本可以确定不对（缺 /v1 或前缀）。';
+    }
+    if (models && String(models.status) === '200' && tiny && tiny.html) {
+      return 'GET /models 正常，但 POST /chat/completions 返回网页 —— 网关的补全路径与模型列表路径不一致，' +
+             '请确认补全接口的真实路径（可能是 /v1/chat/completions 或其它自定义路径）。';
+    }
+    if (tiny && String(tiny.status) === '200' && shortq && shortq.html) {
+      return '短请求可以、稍长请求返回网页，可能是网关/WAF 对请求体积有限制。';
+    }
+    if (tiny && /401|403/.test(String(tiny.status))) {
+      return '鉴权失败，检查 API Key 与请求头。';
+    }
+    if (shortq && String(shortq.status) === '200' && !shortq.html) {
+      return '三步都通，应该可以直接使用。若对话框仍报错，把这次报错内容发我。';
+    }
+    return '按上面三步的结果调整 Base URL / Key / 模型名。';
   }
 
   /* ---------------- 提示词 ---------------- */
@@ -438,6 +507,8 @@
           '<div class="ai-endpoint" id="aiEndpoint"></div></div>' +
         '<div class="fld"><label>API Key</label>' +
           '<input id="aiKey" type="password" placeholder="sk-... / 内网 token" value="' + esc(c.key || '') + '"></div>' +
+        '<div class="fld"><label>完整请求地址（可选，填了就直接用它）</label>' +
+          '<input id="aiFull" placeholder="http://10.0.0.8:8000/v1/chat/completions" value="' + esc(c.full || '') + '"></div>' +
         '<div class="fld"><label>模型名</label>' +
           '<input id="aiModel" placeholder="deepseek-chat" value="' + esc(c.model || '') + '"></div>' +
         '<div class="fld"><label>允许 AI 生成代码补丁</label><div class="choices" id="aiEdit">' +
@@ -445,7 +516,9 @@
           '<button data-v="1" class="' + (c.allowEdit ? 'on' : '') + '">可生成补丁（需确认）</button>' +
         '</div></div>' +
         '<div class="ai-test"><button class="btn" id="aiTest">测试连接</button>' +
-        '<span id="aiTestMsg" class="ai-testmsg">尚未测试</span></div>',
+        '<button class="btn" id="aiDiag">诊断</button>' +
+        '<span id="aiTestMsg" class="ai-testmsg">尚未测试</span></div>' +
+        '<pre class="ai-diag" id="aiDiagOut" hidden></pre>',
       okText: '保存',
       onOk() {
         const next = readForm();
@@ -459,6 +532,7 @@
     function readForm() {
       return {
         base: document.getElementById('aiBase').value.trim(),
+        full: document.getElementById('aiFull').value.trim(),
         key: document.getElementById('aiKey').value.trim(),
         model: document.getElementById('aiModel').value.trim(),
         temp: c.temp ?? 0.3,
@@ -482,13 +556,28 @@
       const baseInput = document.getElementById('aiBase');
       const epBox = document.getElementById('aiEndpoint');
       const paintEndpoint = () => {
+        const full = (document.getElementById('aiFull').value || '').trim();
         const b = baseInput.value.trim().replace(/\/+$/, '');
+        if (full) { epBox.textContent = '实际请求：POST ' + full; return; }
         epBox.textContent = b
-          ? '实际请求：POST ' + (/\/chat\/completions$/.test(b) ? b : b + '/chat/completions')
+          ? '实际请求：POST ' + (/\/completions$/.test(b) ? b : b + '/chat/completions')
           : '实际请求：（先填写 Base URL）';
       };
       baseInput.addEventListener('input', paintEndpoint);
+      document.getElementById('aiFull').addEventListener('input', paintEndpoint);
       paintEndpoint();
+
+      document.getElementById('aiDiag').onclick = async () => {
+        const out = document.getElementById('aiDiagOut');
+        out.hidden = false;
+        out.textContent = '诊断中…';
+        store.set('icn-ai-cfg', readForm());
+        const rows = await diagnose();
+        const NL = String.fromCharCode(10);
+        out.textContent = rows.map(r =>
+          r.step + NL + '  状态 ' + r.status + ' · 类型 ' + r.ct + ' · ' + r.ms + 'ms' + NL + '  返回 ' + r.head
+        ).join(NL + NL) + NL + NL + '结论：' + conclude(rows);
+      };
 
       document.getElementById('aiTest').onclick = async () => {
         const msg = document.getElementById('aiTestMsg');

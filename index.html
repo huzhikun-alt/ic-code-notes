@@ -373,9 +373,9 @@
     .splitter{left:calc(100% - var(--notew,384px) - 21px)}
   }
 </style>
-<link rel="stylesheet" href="ui-refresh.css?v=20261104g">
-<link rel="stylesheet" href="presets.css?v=20261104g">
-<link rel="stylesheet" href="ai.css?v=20261104g">
+<link rel="stylesheet" href="ui-refresh.css?v=20261104h">
+<link rel="stylesheet" href="presets.css?v=20261104h">
+<link rel="stylesheet" href="ai.css?v=20261104h">
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><defs><symbol id="i-sparkles" viewBox="0 0 24 24">
@@ -558,7 +558,7 @@
     <div class="sep"></div>
     <button role="menuitem" id="btnReset" class="dang"><svg class="ic"><use href="#i-rotate-ccw"/></svg>重置数据</button>
     <div class="sep"></div>
-    <div class="ver" id="buildVer">构建 20261104-0415</div>
+    <div class="ver" id="buildVer">构建 20261104-1230</div>
   </div>
 </div>
 
@@ -1116,6 +1116,9 @@ if(!hasFile()){
 }
 activeLang = cur ? PROJECTS[curProj].files[cur].lang : 'perl';
 
+/* 左侧分类各自独立展开，互不影响 */
+const openCats = new Set([activeLang]);
+
 /* ============================================================
    通用
    ============================================================ */
@@ -1478,14 +1481,18 @@ function renderNav(){
   ['all', ...Object.keys(LANGS)].forEach(lg=>{
     const list=Object.keys(f).filter(k=>lg==='all'||f[k].lang===lg);
     if(!list.length && lg!=='all') return;
-    const open=activeLang===lg;
+    const open = openCats.has(lg);
 
     const cat=document.createElement('div');
-    cat.className='cat'+(open?' on':'');
+    cat.className='cat'+(activeLang===lg?' on':'')+(open?' open':'');
     cat.innerHTML='<svg class="ic car"><use href="#i-chevron-right"/></svg>'+
       '<span class="nm">'+(lg==='all'?'全部文件':LANGS[lg])+'</span>'+
       '<span class="c">'+list.length+'</span>';
-    cat.onclick=()=>{ activeLang=lg; renderNav(); };
+    cat.onclick=()=>{
+      if(openCats.has(lg)) openCats.delete(lg); else openCats.add(lg);
+      activeLang=lg;
+      renderNav();
+    };
     cats.appendChild(cat);
 
     if(open){
@@ -1505,7 +1512,7 @@ function renderNav(){
           '<button class="more" title="更多">⋯</button>';
         d.onclick=e=>{
           if(e.target.closest('.more')) return;
-          cur=k; activeLang=fo.lang; renderNav(); renderCode(); showView('code');
+          cur=k; activeLang=fo.lang; openCats.add(fo.lang); renderNav(); renderCode(); showView('code');
         };
         d.querySelector('.more').onclick=e=>{
           e.stopPropagation();
@@ -2702,7 +2709,7 @@ document.addEventListener('keydown',e=>{
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();
 </script>
-<script src="ui-refresh.js?v=20261104g"></script>
-<script src="ai.js?v=20261104g"></script>
+<script src="ui-refresh.js?v=20261104h"></script>
+<script src="ai.js?v=20261104h"></script>
 </body>
 </html>

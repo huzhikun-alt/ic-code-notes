@@ -149,3 +149,8 @@ body.ai-open .view{right:368px}
 
 /* 可编辑的空行靠 CSS 撑开，不用占位字符 */
 .line .src[contenteditable="true"]{display:inline-block;min-width:2px;min-height:1.25em}
+
+/* 分类展开状态与筛选状态分离 */
+.cat.open .car{transform:rotate(90deg);color:var(--accent)}
+.cat.on{background:var(--surface);color:var(--ink);font-weight:600}
+.cat.open:not(.on) .car{color:var(--tx2)}

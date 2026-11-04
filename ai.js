@@ -237,11 +237,23 @@
           messages
         })
       });
+      const raw = await res.text().catch(() => '');
       if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        throw new Error('HTTP ' + res.status + (body ? ' · ' + body.slice(0, 180) : ''));
+        throw new Error('HTTP ' + res.status + (raw ? ' · ' + raw.slice(0, 200).replace(/\s+/g, ' ') : ''));
       }
-      const data = await res.json();
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch (e) {
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        const isHtml = /html/.test(ct) || /^\s*</.test(raw);
+        throw new Error(
+          (isHtml
+            ? '这个地址返回的是网页而不是接口。请检查 Base URL 是否少了路径段（常见是 /v1），当前请求的是 ' + url
+            : '返回内容不是合法 JSON') +
+          '；前 120 字：' + raw.slice(0, 120).replace(/\s+/g, ' ')
+        );
+      }
       return (data && data.choices && data.choices[0] && data.choices[0].message &&
               data.choices[0].message.content) || '';
     } finally {
@@ -259,11 +271,17 @@
     // 1) 先试 /models（最轻，多数兼容网关都实现）
     try {
       const r = await fetch(base + '/models', { headers: auth });
-      if (r.ok) {
-        const j = await r.json().catch(() => null);
+      const bodyText = await r.text().catch(() => '');
+      const isHtml = /^\s*</.test(bodyText);
+      if (r.ok && !isHtml) {
+        let j = null; try { j = JSON.parse(bodyText); } catch (e) {}
         const n = j && Array.isArray(j.data) ? j.data.length : 0;
         return { ok: true, ms: Math.round(performance.now() - t0),
                  msg: '连接成功' + (n ? ' · 可用模型 ' + n + ' 个' : '') };
+      }
+      if (r.ok && isHtml) {
+        return { ok: false, ms: Math.round(performance.now() - t0),
+                 msg: '这个地址返回的是网页，不是接口。Base URL 可能少了 /v1 这类路径段（当前：' + base + '）' };
       }
       if (r.status !== 404 && r.status !== 405) {
         const t = await r.text().catch(() => '');
@@ -416,7 +434,8 @@
             '<button data-p="' + k + '" class="' + (k === 'custom' ? 'on' : '') + '">' + n + '</button>').join('') +
         '</div></div>' +
         '<div class="fld"><label>Base URL（不要带结尾斜杠）</label>' +
-          '<input id="aiBase" placeholder="http://10.0.0.8:8000/v1" value="' + esc(c.base || '') + '"></div>' +
+          '<input id="aiBase" placeholder="http://10.0.0.8:8000/v1" value="' + esc(c.base || '') + '">' +
+          '<div class="ai-endpoint" id="aiEndpoint"></div></div>' +
         '<div class="fld"><label>API Key</label>' +
           '<input id="aiKey" type="password" placeholder="sk-... / 内网 token" value="' + esc(c.key || '') + '"></div>' +
         '<div class="fld"><label>模型名</label>' +
@@ -459,6 +478,17 @@
       });
       document.querySelectorAll('#aiEdit button').forEach(b => b.onclick = () =>
         document.querySelectorAll('#aiEdit button').forEach(x => x.classList.toggle('on', x === b)));
+
+      const baseInput = document.getElementById('aiBase');
+      const epBox = document.getElementById('aiEndpoint');
+      const paintEndpoint = () => {
+        const b = baseInput.value.trim().replace(/\/+$/, '');
+        epBox.textContent = b
+          ? '实际请求：POST ' + (/\/chat\/completions$/.test(b) ? b : b + '/chat/completions')
+          : '实际请求：（先填写 Base URL）';
+      };
+      baseInput.addEventListener('input', paintEndpoint);
+      paintEndpoint();
 
       document.getElementById('aiTest').onclick = async () => {
         const msg = document.getElementById('aiTestMsg');

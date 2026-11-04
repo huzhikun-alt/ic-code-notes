@@ -164,3 +164,5 @@ body.ai-open .view{right:368px}
 .ai-raw{white-space:pre-wrap;font:11.5px/1.6 var(--mono);background:var(--surface-soft);
   border:1px solid var(--edge);border-radius:7px;padding:8px;max-height:220px;overflow:auto;color:var(--tx2)}
 .ai-err{color:var(--rose);font-size:12px;line-height:1.7;white-space:pre-wrap}
+.ai-endpoint{font:10.5px var(--mono);color:var(--muted);margin-top:6px;line-height:1.6;
+  word-break:break-all}

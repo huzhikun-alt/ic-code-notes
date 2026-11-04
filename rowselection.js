@@ -101,25 +101,65 @@
     });
   }
 
-  /* 点行号：选行（不进入编辑） */
+  /* 行号上按下 = 开始拖选；行内空白处按下也可以 */
+  let dragging = false, anchor = 0;
+
+  const rowIndexOf = el => {
+    const row = el && el.closest && el.closest('.line');
+    return row ? lineRows().indexOf(row) + 1 : 0;
+  };
+  const rowAtY = y => {
+    const rows = lineRows();
+    if (!rows.length) return 0;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i].getBoundingClientRect();
+      if (y >= r.top && y <= r.bottom) return i + 1;
+    }
+    const first = rows[0].getBoundingClientRect();
+    return y < first.top ? 1 : rows.length;
+  };
+
   codeEl.addEventListener('mousedown', e => {
-    const num = e.target.closest('.num');
-    if (!num) return;
+    if (e.button !== 0) return;
+    if (e.target.closest('.nb') || e.target.closest('button')) return;
+    const onNum = !!e.target.closest('.num');
+    const onBlank = !e.target.closest('.src');
+    if (!onNum && !onBlank) return;
+
+    const idx = onNum ? rowIndexOf(e.target) : rowAtY(e.clientY);
+    if (idx < 1) return;
+
     e.preventDefault();
     e.stopPropagation();
-    const row = num.closest('.line');
-    const idx = lineRows().indexOf(row) + 1;
-    if (idx > 0) selectRow(idx, e.shiftKey);
+    dragging = true;
+    if (e.shiftKey && hasSel()) {
+      anchor = from;
+      to = Math.max(from, idx);
+      from = Math.min(from, idx);
+      paintRows();
+    } else {
+      anchor = idx;
+      selectRow(idx, false);
+    }
   }, true);
 
-  /* Shift + 点行内任意位置：连选 */
-  codeEl.addEventListener('mousedown', e => {
-    if (!e.shiftKey || e.target.closest('.nb') || e.target.closest('button')) return;
-    const row = e.target.closest('.line');
-    if (!row) return;
-    const idx = lineRows().indexOf(row) + 1;
-    if (idx > 0) { e.preventDefault(); e.stopPropagation(); selectRow(idx, true); }
-  }, true);
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const idx = rowAtY(e.clientY);
+    if (idx < 1) return;
+    from = Math.min(anchor, idx);
+    to = Math.max(anchor, idx);
+    paintRows();
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    if (window.getSelection) {
+      const s = window.getSelection();
+      if (s && s.removeAllRanges) s.removeAllRanges();
+    }
+  });
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && hasSel()) { clearRows(); }

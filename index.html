@@ -353,9 +353,9 @@
     .splitter{left:calc(100% - var(--notew,384px) - 21px)}
   }
 </style>
-<link rel="stylesheet" href="ui-refresh.css?v=20261105b">
-<link rel="stylesheet" href="presets.css?v=20261105b">
-<link rel="stylesheet" href="ai.css?v=20261105b">
+<link rel="stylesheet" href="ui-refresh.css?v=20261105c">
+<link rel="stylesheet" href="presets.css?v=20261105c">
+<link rel="stylesheet" href="ai.css?v=20261105c">
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><defs><symbol id="i-sparkles" viewBox="0 0 24 24">
@@ -537,7 +537,7 @@
     <div class="sep"></div>
     <button role="menuitem" id="btnReset" class="dang"><svg class="ic"><use href="#i-rotate-ccw"/></svg>重置数据</button>
     <div class="sep"></div>
-    <div class="ver" id="buildVer">构建 20261105-0035</div>
+    <div class="ver" id="buildVer">构建 20261105-0110</div>
   </div>
 </div>
 
@@ -633,6 +633,7 @@
 <div id="mask"><div class="dlg" id="dlgBody"></div></div>
 <div id="toast"></div>
 
+<script src="indent.js?v=20261105c"></script>
 <script>
 /* ============================================================
    数据
@@ -1868,10 +1869,7 @@ function renderCode(){
         if(ev.key==='Enter' && !ev.shiftKey){
           ev.preventDefault();
           const t=ed.innerText.replace(/\u00a0/g,'');
-          const indent=(t.match(/^[ \t]*/)||[''])[0];
-          const opens=/[{([]\s*$/.test(t) || (f.lang==='python' && /:\s*$/.test(t));
-          const unit=f.lang==='python'?'    ':'  ';
-          commitEdit(i,true,false, opens ? indent+unit : indent);
+          commitEdit(i,true,false, nextIndent(t, i));
         }
         else if(ev.key==='Tab'){
           ev.preventDefault();
@@ -2112,8 +2110,8 @@ codeEl.addEventListener('click', e=>{
   }
   /* 拖动超过几个像素说明是在选文字，不要进入编辑 */
   if(downPt && (Math.abs(e.clientX-downPt.x)>4 || Math.abs(e.clientY-downPt.y)>4)) return;
-  const sel=window.getSelection();
-  if(sel && sel.toString().trim()) return;
+  /* 单击就进编辑：不再因为有残留选区而失效，但保留按行选择的结果 */
+  if(window.__clearRowSelection) window.__clearRowSelection();
   let offset = null;
   const src = row.querySelector('.src');
   const caret = document.caretRangeFromPoint && document.caretRangeFromPoint(e.clientX, e.clientY);
@@ -2641,8 +2639,8 @@ document.addEventListener('keydown',e=>{
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();
 </script>
-<script src="ui-refresh.js?v=20261105b"></script>
-<script src="ai.js?v=20261105b"></script>
-<script src="rowselection.js?v=20261105b"></script>
+<script src="ui-refresh.js?v=20261105c"></script>
+<script src="ai.js?v=20261105c"></script>
+<script src="rowselection.js?v=20261105c"></script>
 </body>
 </html>

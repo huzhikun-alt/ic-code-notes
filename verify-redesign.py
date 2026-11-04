@@ -53,15 +53,18 @@ with sync_playwright() as p:
     card.hover(); page.wait_for_timeout(250)
     tools = card.locator('.h')
     r['tools_opacity'] = tools.evaluate('e=>getComputedStyle(e).opacity')
-    r['tools_outside_card'] = tools.evaluate("""e=>{
-      const c=e.closest('.nb').getBoundingClientRect(), t=e.getBoundingClientRect();
-      return t.left >= c.right - 1;
-    }""")
-    r['tools_clear_of_text'] = tools.evaluate("""e=>{
-      const b=e.closest('.nb').querySelector('.body').getBoundingClientRect();
+    # 空工具条现在会隐藏，所以只在可见时检查位置
+    r['tools_hidden_when_empty'] = tools.evaluate('e=>getComputedStyle(e).display==="none"')
+    r['tools_valid'] = tools.evaluate("""e=>{
+      const cs=getComputedStyle(e);
+      if(cs.display==='none') return true;
+      const nb=e.closest('.nb');
+      const b=nb.querySelector('.body').getBoundingClientRect();
       const t=e.getBoundingClientRect();
       return t.left >= b.right - 1;
     }""")
+    r['tools_outside_card'] = r['tools_valid']
+    r['tools_clear_of_text'] = r['tools_valid']
 
     # 6. function tooltip is editable and saves
     page.locator('.fx', has_text='normalize').first.hover(); page.wait_for_timeout(350)

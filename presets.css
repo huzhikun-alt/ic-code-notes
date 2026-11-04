@@ -5,7 +5,7 @@
 .tk-k{color:var(--t-k)}
 .tk-s{color:var(--t-s)}
 .tk-n{color:var(--t-n)}
-.tk-c{color:var(--t-c);font-style:italic}
+.tk-c{color:var(--t-c)}
 .tk-p{color:var(--t-p)}
 .fx{color:var(--t-fx);background:color-mix(in srgb,var(--t-fx) 13%,transparent);
   border-bottom:1px solid color-mix(in srgb,var(--t-fx) 45%,transparent)}

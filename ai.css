@@ -254,3 +254,26 @@ html[data-note-mode="side"] .nb:has(.achip){padding-right:140px}
 .fnitem .xp{font:8.5px var(--mono);color:var(--teal);border:1px solid color-mix(in srgb,var(--teal) 35%,transparent);
   border-radius:4px;padding:0 4px;background:color-mix(in srgb,var(--teal) 8%,transparent)}
 .catcap{font:9.5px var(--mono);letter-spacing:.08em;color:var(--dim);padding:8px 12px 3px}
+
+/* ===== 选中文字后的浮动操作条 ===== */
+.textsel-bar{position:fixed;z-index:61;display:flex;align-items:center;gap:2px;
+  background:var(--surface);border:1px solid var(--edge);border-radius:9px;
+  padding:3px 5px;box-shadow:0 12px 32px -16px #0b1220a0;font-size:12px;
+  animation:tsIn .12s ease-out}
+@keyframes tsIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.textsel-bar .ts-label{font:10.5px var(--mono);color:var(--muted);padding:0 6px;
+  max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  border-right:1px solid var(--edge);margin-right:2px}
+.textsel-bar button{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;
+  border-radius:6px;border:0;background:transparent;color:var(--tx2);font-size:11.5px}
+.textsel-bar button:hover{background:var(--surface-soft);color:var(--ink)}
+.textsel-bar .ic{width:13px;height:13px}
+
+/* 选中文字的背景更明显一点 */
+#code ::selection,#code ::-moz-selection{background:color-mix(in srgb,var(--accent) 38%,transparent);color:inherit}
+#code .fx::selection{background:color-mix(in srgb,var(--accent) 42%,transparent)}
+
+/* 选中高亮贴合文字：行高 30px 的框太大，文字本身收紧到 ~19px */
+.line{min-height:30px}
+.line .src{line-height:19px}
+.line .src[contenteditable="true"]{line-height:19px}

@@ -502,14 +502,102 @@
   if(tog){ tog.onclick=()=>setOpen(!aiOpen); tog.classList.toggle('on', aiOpen); }
   const _setOpen=setOpen; setOpen=function(v){ _setOpen(v); const t=document.getElementById('aiToggle'); if(t) t.classList.toggle('on', v); };
   $$('.ai-act').forEach(b => b.onclick = () => runAction(b.dataset.act));
+  /* ---------- 对话：带上下文走真实模型 ---------- */
+  const SYS_CHAT = '你是嵌在「IC 代码笔记」里的代码阅读助手。用户正在读 IC / EDA 代码。'
+    + '你会收到工程信息、文件清单、函数库摘要，以及当前文件（可能含选中范围）的源码。'
+    + '回答要求：用中文；结论先行；提到代码时给出具体行号；'
+    + '如果上下文不足以回答，直接说缺哪部分信息，不要编造 API 或信号名。';
+
+  function assembleContext(question) {
+    const f = hasFile() ? files()[cur] : null;
+    const out = [];
+    const proj = Object.keys(PROJECTS);
+    out.push('# 工程');
+    out.push('- 当前工程：' + curProj + (PROJECTS[curProj] && PROJECTS[curProj].desc ? '（' + PROJECTS[curProj].desc + '）' : ''));
+    out.push('- 全部工程：' + proj.join('、'));
+
+    if (PROJECTS[curProj]) {
+      const files = PROJECTS[curProj].files;
+      const keys = Object.keys(files);
+      out.push('- 本工程文件清单（' + keys.length + ' 个）：');
+      keys.forEach(k => {
+        out.push('  - ' + files[k].path + '（' + files[k].lang + '，' + files[k].lines.length + ' 行）');
+      });
+    }
+
+    // 函数库摘要（当前语言优先）
+    const langs = f ? [f.lang] : Object.keys(LANGS);
+    langs.forEach(lg => {
+      const items = (LIB[lg] || []).slice(0, 20);
+      if (!items.length) return;
+      out.push('- 函数库 · ' + lg + '（' + (LIB[lg] || []).length + ' 条，列前 ' + items.length + '）：');
+      items.forEach(en => out.push('  - ' + en.name + (en.sig ? '：' + en.sig : '') +
+        (en.desc ? ' — ' + en.desc.replace(/\n/g, ' ') : '')));
+    });
+
+    if (f) {
+      const sel = selRange();
+      const from = sel ? sel.from : 1;
+      const to = sel ? sel.to : Math.min(f.lines.length, 400);
+      out.push('');
+      out.push('# 当前文件 ' + f.path + '（' + f.lang + '，共 ' + f.lines.length + ' 行）'
+        + (sel ? '· 用户选中 ' + sel.from + '–' + sel.to + ' 行' : ''));
+      if (f.lines.length > 400 && !sel) {
+        out.push('（文件较长，只给出前 400 行；如需其它位置请让用户选中后再问）');
+      }
+      const body = f.lines.slice(from - 1, to)
+        .map((l, i) => String(from + i).padStart(4, ' ') + ' | ' + l).join('\n');
+      out.push('```' + (f.lang === 'verilog' ? 'systemverilog' : f.lang));
+      out.push(body);
+      out.push('```');
+
+      // 当前文件的批注
+      const notes = NOTES[nkey()] || {};
+      const keys = Object.keys(notes);
+      if (keys.length) {
+        out.push('');
+        out.push('# 我在这个文件里已有的批注');
+        keys.slice(0, 20).forEach(k => {
+          const n = notes[k];
+          out.push('  - 第 ' + k + ' 行：' + String(n.text || '').replace(/\n/g, ' '));
+        });
+      }
+    }
+
+    out.push('');
+    out.push('# 用户的问题');
+    out.push(question);
+    return out.join('\n');
+  }
+
+  async function sendChat(text) {
+    const c = cfg();
+    chatSay('user', esc(text));
+    if (!c.key) {
+      chatSay('ai', '<div class="ai-result"><p class="dim">还没有接入 API。点「接入设置」填写地址与 Key，'
+        + '可用「测试连接」验证。</p></div>');
+      return;
+    }
+    const out = chatSay('ai',
+      '<span class="typing"><svg class="ic spin"><use href="#i-loader-circle"/></svg>思考中…</span>');
+    try {
+      const answer = await apiChat([
+        { role: 'system', content: SYS_CHAT },
+        { role: 'user', content: assembleContext(text) }
+      ], { maxTokens: 1600, temp: 0.3 });
+      out.innerHTML = '<div class="ai-result"><div class="ai-answer"></div></div>';
+      out.querySelector('.ai-answer').textContent = (answer || '').trim() || '（模型返回为空）';
+    } catch (err) {
+      out.innerHTML = '<div class="ai-result"><div class="ai-err"></div></div>';
+      out.querySelector('.ai-err').textContent = '请求失败：' + err.message;
+    }
+  }
+
   document.getElementById('aiSend').onclick = () => {
     const box = document.getElementById('aiInput');
     const v = box.value.trim(); if(!v) return;
     box.value = '';
-    chatSay('user', esc(v));
-    setTimeout(() => chatSay('ai',
-      '<div class="ai-result"><p>（演示模式）这个问题需要接入模型才能回答。</p>' +
-      '<p class="dim">在「接入设置」里填入 API Key 即可。</p></div>'), 500);
+    sendChat(v);
   };
   document.getElementById('aiInput').addEventListener('keydown', e => {
     if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); document.getElementById('aiSend').click(); }

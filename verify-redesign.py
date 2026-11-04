@@ -71,13 +71,6 @@ with sync_playwright() as p:
     page.keyboard.press('Enter'); page.wait_for_timeout(250)
     r['tip_saved'] = page.evaluate("()=>{const e=(LIB['perl']||[]).find(x=>x.name==='normalize');return e&&e.desc;}")
 
-    # 7. lost notes moved into a dialog
-    page.locator('#btnMenu').click(); page.wait_for_timeout(150)
-    page.locator('#btnLost').click(); page.wait_for_timeout(250)
-    r['lost_dialog_open'] = page.locator('#mask').is_visible()
-    r['lost_rows'] = page.locator('.lostrow').count()
-    page.locator('#dlgOk').click(); page.wait_for_timeout(150)
-
     # 8. nav typography
     r['nav_font_px'] = page.locator('.file').first.evaluate('e=>getComputedStyle(e).fontSize')
     r['nav_row_h'] = page.locator('.file').first.evaluate('e=>Math.round(e.getBoundingClientRect().height)')
@@ -91,6 +84,5 @@ with sync_playwright() as p:
     assert centred is not None and abs(centred) <= 2, f'code line not centred: {centred}'
     assert r['tools_outside_card'] and r['tools_clear_of_text']
     assert r['tip_editable'] == 'true' and r['tip_saved'] == '改过的描述'
-    assert r['lost_dialog_open'] and r['lost_rows'] == 1
     assert not errors, errors
     browser.close()

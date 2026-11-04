@@ -206,26 +206,6 @@
           padding:0 5px;line-height:1.5}
   .pinbtn:hover{background:rgba(79,208,191,.12)}
 
-  /* 未定位笔记 */
-  .lostbox{margin:26px 22px 0;max-width:820px;border:1px solid #3d1f2b;border-radius:10px;
-           background:#150f13;padding:14px 16px}
-  .lostbox .lh{font-size:12.5px;color:#f0a8bb;display:flex;align-items:center;gap:8px;
-               margin-bottom:4px;flex-wrap:wrap}
-  .lostbox .lh span{font:9.5px var(--mono);background:rgba(242,121,155,.14);border-radius:9px;
-                    padding:0 6px}
-  .lostbox .lh i{font-style:normal;font-size:11px;color:#8c6a76;flex-basis:100%;
-                 margin-top:2px;line-height:1.6}
-  .lcard{border-top:1px dashed #3a2530;padding:10px 0 8px;margin-top:8px}
-  .lcard .ltx{font-size:12.2px;line-height:1.7;color:#d8c8ce;white-space:pre-wrap}
-  .lcard .lmeta{display:flex;gap:8px;align-items:center;margin-top:7px;font-size:10.5px;
-                color:#8c6a76;flex-wrap:wrap}
-  .lcard .lmeta input{background:#0c1016;border:1px solid #3d2a34;border-radius:5px;
-                      padding:3px 6px;color:var(--tx);font-size:11px;outline:none}
-  .lcard .lmeta input:focus{border-color:#6b3b4a}
-  .lcard .lmeta button{font-size:10.5px;border:1px solid #3d2a34;border-radius:5px;padding:2px 8px;
-                       color:#d9b3c0}
-  .lcard .lmeta button:hover{background:#2a1a20;color:#fff}
-
   .tk-k{color:#c792ea} .tk-s{color:#c3e88d} .tk-c{color:#55657c;font-style:italic}
   .tk-n{color:#f78c6c} .tk-p{color:#8ea3bd}
   .fx{color:#8ee0ff;background:rgba(127,216,255,.09);border-bottom:1px solid rgba(127,216,255,.5);
@@ -373,9 +353,9 @@
     .splitter{left:calc(100% - var(--notew,384px) - 21px)}
   }
 </style>
-<link rel="stylesheet" href="ui-refresh.css?v=20261105a">
-<link rel="stylesheet" href="presets.css?v=20261105a">
-<link rel="stylesheet" href="ai.css?v=20261105a">
+<link rel="stylesheet" href="ui-refresh.css?v=20261105b">
+<link rel="stylesheet" href="presets.css?v=20261105b">
+<link rel="stylesheet" href="ai.css?v=20261105b">
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><defs><symbol id="i-sparkles" viewBox="0 0 24 24">
@@ -552,13 +532,12 @@
     <button role="menuitem" id="btnExtract"><svg class="ic"><use href="#i-scan-text"/></svg>摘出本文件注释</button>
     <button role="menuitem" id="btnAutoComment"><svg class="ic"><use href="#i-pencil"/></svg><span id="autoLabel">行末注释自动转卡片</span></button>
     <div class="sep"></div>
-    <button role="menuitem" id="btnLost" hidden><svg class="ic"><use href="#i-circle-question-mark"/></svg><span id="lostLabel">未定位的笔记</span></button>
     <button role="menuitem" id="themeToggle"><svg class="ic"><use href="#i-palette"/></svg>配色方案…</button>
     <button role="menuitem" id="btnHelp"><svg class="ic"><use href="#i-keyboard"/></svg>快捷键</button>
     <div class="sep"></div>
     <button role="menuitem" id="btnReset" class="dang"><svg class="ic"><use href="#i-rotate-ccw"/></svg>重置数据</button>
     <div class="sep"></div>
-    <div class="ver" id="buildVer">构建 20261105-0010</div>
+    <div class="ver" id="buildVer">构建 20261105-0035</div>
   </div>
 </div>
 
@@ -796,15 +775,121 @@ seedNote('dma_ctrl::dma_regs.pl', 6, '⚠ 这个 normalize 和 uart_log_tools �
 seedNote('uart_log_tools::check_log.pl', 5,
   '这条笔记当初写在第 5 行，后来上面插入了代码，锚点自己跟到了真正的 printf 那一行。', 11);
 
-/* 演示二：指纹对不上任何一行 → 进「未定位」 */
-seedNote('uart_log_tools::check_log.pl', 99,
-  '这条笔记锚定的代码已经被删掉了。它不会静默消失，而是进「未定位」等你处理。',
-  1, 'zzlost');
+function buildNoteCard(no, entry){
+  const note = entry.note, from = entry.from, state = entry.state;
 
-/* 把笔记按指纹对回当前代码：ok / moved / conflict / lost */
+  /* 从源码摘出来的注释：只显示注释本身，不带分类标签 */
+  if(note.kind === 'comment' && state === 'ok'){
+    const nb=document.createElement('div');
+    nb.className='nb cmt'; nb.dataset.ln=no;
+    const t=document.createElement('div');
+    /* 从源码摘出来的注释：仍然可以编辑 */
+    t.className='ctext'; t.contentEditable='true'; t.textContent=note.text||'';
+    t.addEventListener('input',()=>{ note.text=t.innerText; saveAll(); });
+    t.addEventListener('blur',()=>{
+      const nm=NOTES[nkey()];
+      if(nm[from] && String(nm[from].text||'').trim()===''){ delete nm[from]; saveAll(); renderCode(); }
+    });
+    nb.tabIndex=0;
+    t.addEventListener('dblclick',()=>selectAllIn(t));
+    nb.addEventListener('keydown',ev=>{
+      if(document.activeElement===nb && (ev.key==='Delete'||ev.key==='Backspace')){
+        ev.preventDefault();
+        delete NOTES[nkey()][from]; saveAll(); renderCode();
+      }
+    });
+    nb.append(t);
+    return nb;
+  }
+
+  const nb=document.createElement('div');
+  nb.className='nb'+(state==='moved'?' moved':'')+(state==='conflict'?' dup':'');
+  nb.dataset.ln=no;
+
+  const h=document.createElement('div');
+  h.className='h';
+  h.innerHTML='<span class="tag">我的笔记</span><span class="lnk">第 '+no+' 行</span>';
+  if(state==='moved'){
+    const chip=document.createElement('span');
+    chip.className='achip'; chip.textContent='↻ 原第 '+Math.abs(from)+' 行';
+    chip.title='代码改动后，这条笔记按内容指纹自动找回了位置';
+    h.appendChild(chip);
+    const pin=document.createElement('button');
+    pin.className='pinbtn'; pin.textContent='固定';
+    pin.onclick=()=>{
+      const m=NOTES[nkey()];
+      const v=m[from]; delete m[from];
+      v.fp=hashLine(files()[cur].lines[no-1]);
+      m[no]=v; saveAll(); renderCode(); toast('已固定到第 '+no+' 行');
+    };
+    h.appendChild(pin);
+  }
+  if(state==='conflict'){
+    const chip=document.createElement('span');
+    chip.className='achip bad'; chip.textContent='⚠ 与其他笔记重叠';
+    h.appendChild(chip);
+  }
+
+  const tools=document.createElement('div');
+  tools.className='tools';
+  h.appendChild(tools);
+
+  const body=document.createElement('div');
+  body.className='body'; body.contentEditable='true';
+  body.textContent=note.text || '';
+  body.addEventListener('input',()=>{ note.text=body.innerText; saveAll(); });
+  body.addEventListener('keydown',ev=>{
+    if(ev.key==='Enter'&&(ev.ctrlKey||ev.metaKey)){ ev.preventDefault(); body.blur(); }
+    if(ev.key==='Escape'){ body.blur(); }
+  });
+  body.addEventListener('blur',()=>{
+    const nm=NOTES[nkey()];
+    if(nm && nm[from] && String(nm[from].text||'').trim()===''){
+      delete nm[from]; saveAll(); renderCode();
+    }
+  });
+  nb.tabIndex=0;
+  body.addEventListener('dblclick',()=>selectAllIn(body));
+  nb.addEventListener('keydown',ev=>{
+    if(document.activeElement===nb && (ev.key==='Delete'||ev.key==='Backspace')){
+      ev.preventDefault();
+      delete NOTES[nkey()][from]; saveAll(); renderCode();
+    }
+  });
+  if(note.extracted){
+    const x=document.createElement('div');
+    x.className='xcmt';
+    x.textContent=note.extracted;
+    x.title='这里原来有一段源码注释，已摘到笔记下方';
+    nb.append(x);
+  }
+  nb.append(h,body);
+  return nb;
+}
+
+function addNote(no){
+  snapshot('新增第 '+no+' 行笔记');
+  NOTES[nkey()]=NOTES[nkey()]||{};
+  NOTES[nkey()][no]={text:'', fp:hashLine(files()[cur].lines[no-1] || ''), kind:'note'};
+  saveAll(); renderCode();
+  const b=document.querySelector('.nb[data-ln="'+no+'"] .body');
+  if(b) b.focus();
+}
+
+function attachComment(lineNo, cmtText, codeText){
+  const key=nkey();
+  NOTES[key]=NOTES[key]||{};
+  const ex=NOTES[key][lineNo];
+  const fp=hashLine(codeText);
+  if(!ex) NOTES[key][lineNo]={text:cmtText, fp, kind:'comment'};
+  else if(ex.kind==='comment'){ ex.text=(ex.text||'')+'\n'+cmtText; ex.fp=fp; }
+  else { ex.extracted=(ex.extracted? ex.extracted+'\n':'')+cmtText; ex.fp=fp; }
+}
+
+/* 把笔记按指纹对回当前代码：ok / moved / conflict；对不上的直接丢弃 */
 function resolveNotes(fileKey, lines){
   const m = NOTES[fileKey] || {};
-  const byLine = {}, lost = [];
+  const byLine = {};
   Object.keys(m).map(Number).sort((a,b)=>a-b).forEach(key=>{
     const note = m[key];
     if(!note || typeof note !== 'object') return;
@@ -826,13 +911,13 @@ function resolveNotes(fileKey, lines){
     if(target > 0){
       (byLine[target] = byLine[target] || []).push({note, state, from:key});
     }else{
-      lost.push({note, from:key});
+      delete m[key];          // 锚定的代码没了：静默删除，不再提示
     }
   });
   Object.keys(byLine).forEach(k=>{
     if(byLine[k].length > 1) byLine[k].forEach((e,i)=>{ if(i>0) e.state='conflict'; });
   });
-  return {byLine, lost};
+  return {byLine};
 }
 
 /* ============================================================
@@ -1821,7 +1906,6 @@ function renderCode(){
     }
   });
 
-  renderLost(res.lost);
   document.getElementById('editbar').classList.toggle('on', editingLine>=0);
 
   /* 如果刚点的是批注卡片，重渲染后把焦点还给它 */
@@ -1836,173 +1920,6 @@ function renderCode(){
   }
 }
 
-/* 未定位的笔记：代码删了 / 指纹对不上 */
-let lostNotes=[];
-function renderLost(lost){
-  lostNotes = lost || [];
-  const old=document.getElementById('lostbox');
-  if(old) old.remove();
-  const item=document.getElementById('btnLost');
-  if(item){
-    item.hidden = !lostNotes.length;
-    const ll=document.getElementById('lostLabel'); if(ll) ll.textContent='未定位的笔记 ('+lostNotes.length+')';
-  }
-}
-
-/* 未定位的笔记改到弹窗里处理，不再占用正文空间 */
-function openLostDialog(){
-  if(!lostNotes.length){ toast('没有未定位的笔记'); return; }
-  const body = lostNotes.map(({note,from},i)=>
-    '<div class="lostrow" data-i="'+i+'">'+
-      '<div class="ltx">'+esc(note.text||'（空笔记）')+'</div>'+
-      '<div class="lmeta"><span>原第 '+Math.abs(from)+' 行</span>'+
-      '<input type="number" min="1" placeholder="新行号" data-role="ln">'+
-      '<button data-role="bind">绑定</button>'+
-      '<button data-role="del">删除</button></div>'+
-    '</div>').join('');
-
-  openModal({
-    title:'未定位的笔记',
-    sub:'这些笔记原本挂着的代码行已经找不到了。可以指定一个行号重新绑定，或者直接删掉。',
-    body:'<div class="lostlist">'+body+'</div>',
-    okText:'完成', cancelText:false
-  });
-
-  document.querySelectorAll('.lostrow').forEach(row=>{
-    const i=+row.dataset.i;
-    const {note,from}=lostNotes[i];
-    row.querySelector('[data-role="bind"]').onclick=()=>{
-      const n=parseInt(row.querySelector('[data-role="ln"]').value,10);
-      const lines=files()[cur].lines;
-      if(!n || n<1 || n>lines.length){ toast('行号超出范围'); return; }
-      const m=NOTES[nkey()];
-      const v=m[from];
-      delete m[from];
-      if(m[n]) m[n].text=(m[n].text||'')+'\n\n'+(v.text||'');
-      else m[n]=v;
-      m[n].fp=hashLine(lines[n-1]);
-      closeModal(); saveAll(); renderCode(); toast('已绑定到第 '+n+' 行');
-    };
-    row.querySelector('[data-role="del"]').onclick=()=>{
-      delete NOTES[nkey()][from];
-      row.remove(); saveAll(); renderCode(); toast('已删除');
-    };
-  });
-}
-
-function buildNoteCard(no, entry){
-  const note = entry.note, from = entry.from, state = entry.state;
-
-  /* 从源码摘出来的注释：只显示注释本身，不带分类标签 */
-  if(note.kind === 'comment' && state === 'ok'){
-    const nb=document.createElement('div');
-    nb.className='nb cmt'; nb.dataset.ln=no;
-    const t=document.createElement('div');
-    /* 从源码摘出来的注释：仍然可以编辑 */
-    t.className='ctext'; t.contentEditable='true'; t.textContent=note.text||'';
-    t.addEventListener('input',()=>{ note.text=t.innerText; saveAll(); });
-    t.addEventListener('blur',()=>{
-      const nm=NOTES[nkey()];
-      if(nm[from] && String(nm[from].text||'').trim()===''){ delete nm[from]; saveAll(); renderCode(); }
-    });
-    nb.tabIndex=0;
-    t.addEventListener('dblclick',()=>selectAllIn(t));
-    nb.addEventListener('keydown',ev=>{
-      if(document.activeElement===nb && (ev.key==='Delete'||ev.key==='Backspace')){
-        ev.preventDefault();
-        delete NOTES[nkey()][from]; saveAll(); renderCode();
-      }
-    });
-    nb.append(t);
-    return nb;
-  }
-
-  const nb=document.createElement('div');
-  nb.className='nb'+(state==='moved'?' moved':'')+(state==='conflict'?' dup':'');
-  nb.dataset.ln=no;
-
-  const h=document.createElement('div');
-  h.className='h';
-  h.innerHTML='<span class="tag">我的笔记</span><span class="lnk">第 '+no+' 行</span>';
-  if(state==='moved'){
-    const chip=document.createElement('span');
-    chip.className='achip'; chip.textContent='↻ 原第 '+Math.abs(from)+' 行';
-    chip.title='代码改动后，这条笔记按内容指纹自动找回了位置';
-    h.appendChild(chip);
-    const pin=document.createElement('button');
-    pin.className='pinbtn'; pin.textContent='固定';
-    pin.onclick=()=>{
-      const m=NOTES[nkey()];
-      const v=m[from]; delete m[from];
-      v.fp=hashLine(files()[cur].lines[no-1]);
-      m[no]=v; saveAll(); renderCode(); toast('已固定到第 '+no+' 行');
-    };
-    h.appendChild(pin);
-  }
-  if(state==='conflict'){
-    const chip=document.createElement('span');
-    chip.className='achip bad'; chip.textContent='⚠ 与其他笔记重叠';
-    h.appendChild(chip);
-  }
-
-  const tools=document.createElement('div');
-  tools.className='tools';
-  h.appendChild(tools);
-
-  const body=document.createElement('div');
-  body.className='body'; body.contentEditable='true';
-  body.textContent=note.text || '';
-  body.addEventListener('input',()=>{ note.text=body.innerText; saveAll(); });
-  body.addEventListener('keydown',ev=>{
-    if(ev.key==='Enter'&&(ev.ctrlKey||ev.metaKey)){ ev.preventDefault(); body.blur(); }
-    if(ev.key==='Escape'){ body.blur(); }
-  });
-  body.addEventListener('blur',()=>{
-    const nm=NOTES[nkey()];
-    if(nm && nm[from] && String(nm[from].text||'').trim()===''){
-      delete nm[from]; saveAll(); renderCode();
-    }
-  });
-  nb.tabIndex=0;
-  body.addEventListener('dblclick',()=>selectAllIn(body));
-  nb.addEventListener('keydown',ev=>{
-    if(document.activeElement===nb && (ev.key==='Delete'||ev.key==='Backspace')){
-      ev.preventDefault();
-      delete NOTES[nkey()][from]; saveAll(); renderCode();
-    }
-  });
-  if(note.extracted){
-    const x=document.createElement('div');
-    x.className='xcmt';
-    x.textContent=note.extracted;
-    x.title='这里原来有一段源码注释，已摘到笔记下方';
-    nb.append(x);
-  }
-  nb.append(h,body);
-  return nb;
-}
-
-function addNote(no){
-  snapshot('新增第 '+no+' 行笔记');
-  NOTES[nkey()]=NOTES[nkey()]||{};
-  NOTES[nkey()][no]={text:'', fp:hashLine(files()[cur].lines[no-1] || ''), kind:'note'};
-  saveAll(); renderCode();
-  const b=document.querySelector('.nb[data-ln="'+no+'"] .body');
-  if(b) b.focus();
-}
-
-/* 行末注释 → 右侧注释卡；同一行已有笔记时并排存放，不覆盖 */
-function attachComment(lineNo, cmtText, codeText){
-  const key=nkey();
-  NOTES[key]=NOTES[key]||{};
-  const ex=NOTES[key][lineNo];
-  const fp=hashLine(codeText);
-  if(!ex) NOTES[key][lineNo]={text:cmtText, fp, kind:'comment'};
-  else if(ex.kind==='comment'){ ex.text=(ex.text||'')+'\n'+cmtText; ex.fp=fp; }
-  else { ex.extracted=(ex.extracted? ex.extracted+'\n':'')+cmtText; ex.fp=fp; }
-}
-
-/* ---------- 行编辑 ---------- */
 let requestedCaret = null;
 function startEdit(i, caretOffset){
   if(!hasFile()) return;
@@ -2106,7 +2023,7 @@ function shiftNotes(fromLine, delta, isDelete){
   Object.keys(nm).forEach(k=>{
     const n=+k;
     if(isDelete){
-      if(n===fromLine){ out[-n]=nm[k]; return; }   // 行没了 → 笔记转为「未定位」，不静默丢弃
+      if(n===fromLine) return;                      // 行没了 → 对应批注一并删除
       out[n>fromLine?n-1:n]=nm[k];
     }else{
       out[n>=fromLine?n+delta:n]=nm[k];
@@ -2126,6 +2043,19 @@ codeEl.addEventListener('dblclick', e=>{
   if(editingLine===i) return;
   startEdit(i);
 });
+
+/* 点卡片空白处 = 选中整张卡片（不跑进代码行）；焦点在卡片上按退格即删除 */
+codeEl.addEventListener('mousedown', ev => {
+  const nb = ev.target.closest('.nb');
+  if(!nb) return;
+  if(ev.target.closest('button')) return;
+  if(ev.target.isContentEditable) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  document.querySelectorAll('.nb.focused').forEach(x => x.classList.remove('focused'));
+  nb.classList.add('focused');
+  nb.focus({preventScroll:true});
+}, true);
 
 /* 单击就能编辑；拖选文字、或在括号上时不触发 */
 let downPt=null;
@@ -2711,8 +2641,8 @@ document.addEventListener('keydown',e=>{
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();
 </script>
-<script src="ui-refresh.js?v=20261105a"></script>
-<script src="ai.js?v=20261105a"></script>
-<script src="rowselection.js?v=20261105a"></script>
+<script src="ui-refresh.js?v=20261105b"></script>
+<script src="ai.js?v=20261105b"></script>
+<script src="rowselection.js?v=20261105b"></script>
 </body>
 </html>

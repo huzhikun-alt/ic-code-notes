@@ -72,7 +72,8 @@
   mode.addEventListener('change', () => applyMode(mode.value));
 
   /* ---------- lost anchors ---------- */
-  document.getElementById('btnLost').addEventListener('click', () => {
+  const lostBtn = document.getElementById('btnLost');
+  if (lostBtn) lostBtn.addEventListener('click', () => {
     if (typeof openLostDialog === 'function') openLostDialog();
   });
 

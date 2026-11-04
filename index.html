@@ -353,9 +353,9 @@
     .splitter{left:calc(100% - var(--notew,384px) - 21px)}
   }
 </style>
-<link rel="stylesheet" href="ui-refresh.css?v=20261105j">
-<link rel="stylesheet" href="presets.css?v=20261105j">
-<link rel="stylesheet" href="ai.css?v=20261105j">
+<link rel="stylesheet" href="ui-refresh.css?v=20261105k">
+<link rel="stylesheet" href="presets.css?v=20261105k">
+<link rel="stylesheet" href="ai.css?v=20261105k">
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><defs><symbol id="i-sparkles" viewBox="0 0 24 24">
@@ -537,7 +537,7 @@
     <div class="sep"></div>
     <button role="menuitem" id="btnReset" class="dang"><svg class="ic"><use href="#i-rotate-ccw"/></svg>重置数据</button>
     <div class="sep"></div>
-    <div class="ver" id="buildVer">构建 20261105-0500</div>
+    <div class="ver" id="buildVer">构建 20261105-0530</div>
   </div>
 </div>
 
@@ -633,7 +633,7 @@
 <div id="mask"><div class="dlg" id="dlgBody"></div></div>
 <div id="toast"></div>
 
-<script src="indent.js?v=20261105j"></script>
+<script src="indent.js?v=20261105k"></script>
 <script>
 /* ============================================================
    数据
@@ -2039,6 +2039,15 @@ function shiftNotes(fromLine, delta, isDelete){
 codeEl.addEventListener('dblclick', e=>{
   const br=e.target.closest('.br');
   if(br){ clearTimeout(bracketTimer); e.preventDefault(); showScope(br); return; }
+  /* 双击函数名：只选中这个词，不进入编辑，方便右键加入函数库 */
+  const fx=e.target.closest('.fx');
+  if(fx){
+    clearTimeout(fxTimer);
+    e.preventDefault();
+    const r=document.createRange(); r.selectNodeContents(fx);
+    const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    return;
+  }
   const row=e.target.closest('.line');
   if(!row) return;
   if(e.target.closest('.nb')) return;
@@ -2064,6 +2073,7 @@ codeEl.addEventListener('mousedown', ev => {
 let downPt=null;
 let pendingCardFocus=null;   // 提交代码编辑后，把焦点交还给刚点的那张卡片
 let bracketTimer=null;       // 括号单击延迟进入编辑，给双击留出机会
+let fxTimer=null;            // 函数名单击延迟进入编辑，给双击选词留出机会
 /* 找离点击位置最近的一行（点在行外的空白处时用） */
 function nearestLine(y){
   const rows=[...codeEl.querySelectorAll('.line')];
@@ -2107,6 +2117,25 @@ codeEl.addEventListener('click', e=>{
   const row=e.target.closest('.line') || nearestLine(e.clientY);
   if(!row) return;
 
+  /* 点在函数名上：等 220ms，双击就选中这个词，单击才进入编辑 */
+  if(e.target.closest('.fx')){
+    const fxEl=e.target.closest('.fx');
+    clearTimeout(fxTimer);
+    fxTimer=setTimeout(()=>{
+      if(editingLine<0){
+        const caret2=document.caretRangeFromPoint && document.caretRangeFromPoint(e.clientX,e.clientY);
+        let off=null;
+        const src2=row.querySelector('.src');
+        if(caret2 && src2 && src2.contains(caret2.startContainer)){
+          const pre=document.createRange(); pre.selectNodeContents(src2);
+          pre.setEnd(caret2.startContainer, caret2.startOffset);
+          off=pre.toString().length;
+        }
+        startEdit(+row.dataset.i, off);
+      }
+    }, 220);
+    return;
+  }
   /* 点在括号上：等 240ms，双击出配对范围，单击才进入编辑 */
   if(e.target.closest('.br')){
     clearTimeout(bracketTimer);
@@ -2661,9 +2690,9 @@ document.addEventListener('keydown',e=>{
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();
 </script>
-<script src="ui-refresh.js?v=20261105j"></script>
-<script src="ai.js?v=20261105j"></script>
-<script src="rowselection.js?v=20261105j"></script>
-<script src="multiselect.js?v=20261105j"></script>
+<script src="ui-refresh.js?v=20261105k"></script>
+<script src="ai.js?v=20261105k"></script>
+<script src="rowselection.js?v=20261105k"></script>
+<script src="multiselect.js?v=20261105k"></script>
 </body>
 </html>

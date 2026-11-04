@@ -115,17 +115,6 @@
     deleteRange(Math.min(a, b), Math.max(a, b));
   });
 
-  /* 拖选结束后，把整行范围也同步成行选择，方便看到浮条 */
-  document.addEventListener('mouseup', () => {
-    setTimeout(() => {
-      const sel = window.getSelection();
-      if (!sel || sel.isCollapsed) return;
-      const a = rowIndexOf(sel.anchorNode), b = rowIndexOf(sel.focusNode);
-      if (a < 1 || b < 1 || a === b) return;
-      if (window.__setRowSelection) window.__setRowSelection(Math.min(a, b), Math.max(a, b));
-    }, 10);
-  });
-
   /* 下次点击时把延迟的重绘补上 */
   codeEl.addEventListener('mousedown', () => {
     if (window.__needsRender) { window.__needsRender = false; renderCode(); }

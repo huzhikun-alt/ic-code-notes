@@ -122,9 +122,10 @@
   codeEl.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
     if (e.target.closest('.nb') || e.target.closest('button')) return;
-    /* 代码区里任意位置按下都开始“按行拖选”，像 diff 视图那样一拖就选整行 */
-    if (e.target.closest('.src') && e.target.isContentEditable) return;  // 正在编辑的那一行仍可选中文字
-    const idx = rowIndexOf(e.target) || rowAtY(e.clientY);
+    /* 只有行号栏才按行拖选；正文里按下交给浏览器做文字选择 */
+    if (!e.target.closest('.num')) return;
+
+    const idx = rowIndexOf(e.target);
     if (idx < 1) return;
 
     e.preventDefault();

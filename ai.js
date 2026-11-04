@@ -17,8 +17,13 @@
   const rangesOf = () => (RANGES[rkey()] || []);
   function saveRanges(){ store.set('icn-ranges', RANGES); }
 
+  /* 供撤销系统读写范围批注 */
+  window.icRangesGet = () => JSON.parse(JSON.stringify(RANGES[rkey()] || []));
+  window.icRangesSet = arr => { RANGES[rkey()] = JSON.parse(JSON.stringify(arr || [])); saveRanges(); };
+
   function addRange(from, to, text, author){
     if(from > to){ const t=from; from=to; to=t; }
+    if(typeof snapshot === 'function') snapshot(author === 'ai' ? '写入 AI 批注' : '新增范围批注');
     const list = RANGES[rkey()] || (RANGES[rkey()] = []);
     // 交叉检测
     const cross = list.find(r => (from>r.from && from<r.to) !== (to>r.from && to<r.to));
@@ -77,6 +82,7 @@
     body.addEventListener('input', ()=>{ r.text = body.innerText; saveRanges(); });
     body.addEventListener('blur', ()=>{
       if(!body.innerText.trim()){
+        if(typeof snapshot === 'function') snapshot('删除范围批注');
         RANGES[rkey()] = rangesOf().filter(x => x.id !== r.id);
         saveRanges(); renderCode();
       }
@@ -89,6 +95,7 @@
     el.addEventListener('keydown', ev => {
       if(document.activeElement === el && (ev.key==='Delete'||ev.key==='Backspace')){
         ev.preventDefault();
+        if(typeof snapshot === 'function') snapshot('删除范围批注');
         RANGES[rkey()] = rangesOf().filter(x => x.id !== r.id);
         saveRanges(); renderCode(); toast('已删除范围批注');
       }
@@ -537,7 +544,7 @@
           '<button class="btn" id="aiAgain">重试</button></div></div>';
 
         out.querySelector('#aiAccept').onclick = () => {
-          if (conflicts.some(c => c.total)) snapshot('写入 AI 批注');
+          snapshot('写入 AI 批注');
           let added = 0, replaced = 0, skipped = 0;
           items.forEach((x, i) => {
             const mode = readChoice(i, conflicts[i]);

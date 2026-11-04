@@ -353,9 +353,9 @@
     .splitter{left:calc(100% - var(--notew,384px) - 21px)}
   }
 </style>
-<link rel="stylesheet" href="ui-refresh.css?v=20261105e">
-<link rel="stylesheet" href="presets.css?v=20261105e">
-<link rel="stylesheet" href="ai.css?v=20261105e">
+<link rel="stylesheet" href="ui-refresh.css?v=20261105f">
+<link rel="stylesheet" href="presets.css?v=20261105f">
+<link rel="stylesheet" href="ai.css?v=20261105f">
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><defs><symbol id="i-sparkles" viewBox="0 0 24 24">
@@ -537,7 +537,7 @@
     <div class="sep"></div>
     <button role="menuitem" id="btnReset" class="dang"><svg class="ic"><use href="#i-rotate-ccw"/></svg>重置数据</button>
     <div class="sep"></div>
-    <div class="ver" id="buildVer">构建 20261105-0150</div>
+    <div class="ver" id="buildVer">构建 20261105-0210</div>
   </div>
 </div>
 
@@ -633,7 +633,7 @@
 <div id="mask"><div class="dlg" id="dlgBody"></div></div>
 <div id="toast"></div>
 
-<script src="indent.js?v=20261105e"></script>
+<script src="indent.js?v=20261105f"></script>
 <script>
 /* ============================================================
    数据
@@ -2570,13 +2570,14 @@ try{
    撤销 / 重做
    每次改动代码或笔记之前拍一张快照，Ctrl+Z 回到上一张。
    ============================================================ */
-const HIST={undo:[],redo:[],limit:60};
+const HIST={undo:[],redo:[],limit:50};
 
 function takeSnap(label){
   if(!hasFile()) return null;
   return {proj:curProj, file:cur,
           lines:(PROJECTS[curProj].files[cur].lines||[]).slice(),
           notes:JSON.parse(JSON.stringify(NOTES[nkey()]||{})),
+          ranges:(typeof window.icRangesGet==='function' ? window.icRangesGet() : null),
           label};
 }
 function snapshot(label){
@@ -2592,6 +2593,7 @@ function applySnap(s){
   curProj=s.proj; cur=s.file;
   PROJECTS[s.proj].files[s.file].lines=s.lines.slice();
   NOTES[s.proj+'::'+s.file]=JSON.parse(JSON.stringify(s.notes));
+  if(Array.isArray(s.ranges) && typeof window.icRangesSet==='function') window.icRangesSet(s.ranges);
   activeLang=PROJECTS[s.proj].files[s.file].lang;
   editingLine=-1;
   saveAll(); renderProj(); renderNav(); renderCode();
@@ -2639,8 +2641,8 @@ document.addEventListener('keydown',e=>{
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();
 </script>
-<script src="ui-refresh.js?v=20261105e"></script>
-<script src="ai.js?v=20261105e"></script>
-<script src="rowselection.js?v=20261105e"></script>
+<script src="ui-refresh.js?v=20261105f"></script>
+<script src="ai.js?v=20261105f"></script>
+<script src="rowselection.js?v=20261105f"></script>
 </body>
 </html>

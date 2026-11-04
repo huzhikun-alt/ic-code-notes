@@ -150,7 +150,11 @@
   /* 上下文摘要 */
   function selRange(){
     const s = window.getSelection();
-    if(!s || !s.rangeCount || !s.toString().trim()) return null;
+    if(!s || !s.rangeCount || !s.toString().trim()){
+      // 没有文字选择时，回退到「按行选择」
+      const r = window.__rowSelection ? window.__rowSelection() : null;
+      return r || null;
+    }
     const r = s.getRangeAt(0);
     const rows = [...document.querySelectorAll('#code .line')];
     const idxOf = node => {
@@ -385,6 +389,49 @@
     return '按上面三步的结果调整 Base URL / Key / 模型名。';
   }
 
+
+  /* ---------------- 与已有批注的重叠判定 ---------------- */
+  function existingIn(from, to) {
+    const notes = NOTES[nkey()] || {};
+    const lines = [];
+    Object.keys(notes).forEach(k => {
+      const ln = +k;
+      if (ln >= from && ln <= to) lines.push({ line: ln, text: String(notes[k].text || '') });
+    });
+    const rs = rangesOf().filter(r => !(r.to < from || r.from > to));
+    return {
+      lines, ranges: rs,
+      total: lines.length + rs.length,
+      same: rs.filter(r => r.from === from && r.to === to).length > 0
+    };
+  }
+
+  function renderConflict(i, x, c) {
+    const bits = [];
+    if (c.lines.length) {
+      bits.push('已有 ' + c.lines.length + ' 条行批注（第 ' +
+        c.lines.slice(0, 3).map(l => l.line).join('、') + (c.lines.length > 3 ? '…' : '') + ' 行）');
+    }
+    if (c.ranges.length) {
+      bits.push('已有 ' + c.ranges.length + ' 条范围批注（' +
+        c.ranges.map(r => r.from + '–' + r.to).slice(0, 3).join('、') + '）');
+    }
+    const def = 'keep';
+    return '<div class="ai-conflict">' +
+      '<div class="ai-conflict-head">⚠ 与已有批注重叠：' + bits.join('，') + '</div>' +
+      '<label><input type="radio" name="ch' + i + '" value="keep" checked> 并存（保留原批注，另加这条）</label>' +
+      '<label><input type="radio" name="ch' + i + '" value="replace"> 用 AI 替换（删除该范围内的行批注' +
+        (c.same ? '，并更新同范围批注' : '') + '）</label>' +
+      '<label><input type="radio" name="ch' + i + '" value="skip"> 跳过这条</label>' +
+      '</div>';
+  }
+
+  function readChoice(i, c) {
+    if (!c.total) return 'keep';
+    const el = document.querySelector('input[name="ch' + i + '"]:checked');
+    return el ? el.value : 'keep';
+  }
+
   /* ---------------- 提示词 ---------------- */
   function numberedSource(lines, from, to) {
     return lines.slice(from - 1, to)
@@ -468,19 +515,54 @@
           out.querySelector('.ai-raw').textContent = text.slice(0, 1200);
           return;
         }
+        // 找出与现有批注重叠的部分，让用户逐条决定
+        const conflicts = items.map(x => existingIn(x.from, x.to));
+
         out.innerHTML =
           '<div class="ai-result">' +
-          '<div class="ai-sum">识别出 ' + items.length + ' 段：</div>' +
-          items.map(x => '<div class="ai-item"><span class="rg-badge sm">' + x.from + '–' + x.to + '</span>' +
-            '<span>' + esc(x.text) + '</span></div>').join('') +
+          '<div class="ai-sum">识别出 ' + items.length + ' 段' +
+            (conflicts.some(c => c.total) ? '，其中 ' + conflicts.filter(c => c.total).length + ' 段与已有批注重叠' : '') +
+          '：</div>' +
+          items.map((x, i) => {
+            const c = conflicts[i];
+            return '<div class="ai-item"' + (c.total ? ' class="overlap"' : '') + '>' +
+              '<span class="rg-badge sm">' + x.from + '–' + x.to + '</span>' +
+              '<div class="ai-item-body">' +
+                '<div class="ai-item-text">' + esc(x.text) + '</div>' +
+                (c.total ? renderConflict(i, x, c) : '') +
+              '</div></div>';
+          }).join('') +
           '<div class="ai-result-acts">' +
-          '<button class="btn pri" id="aiAccept">全部写入</button>' +
+          '<button class="btn pri" id="aiAccept">按选择写入</button>' +
           '<button class="btn" id="aiAgain">重试</button></div></div>';
+
         out.querySelector('#aiAccept').onclick = () => {
-          let n = 0;
-          items.forEach(x => { if (addRange(x.from, x.to, x.text, 'ai')) n++; });
-          toast('已写入 ' + n + ' 条 AI 批注（待确认）');
-          out.querySelector('.ai-result').innerHTML = '<p class="dim">已写入 ' + n + ' 条，可在代码区审阅。</p>';
+          if (conflicts.some(c => c.total)) snapshot('写入 AI 批注');
+          let added = 0, replaced = 0, skipped = 0;
+          items.forEach((x, i) => {
+            const mode = readChoice(i, conflicts[i]);
+            if (mode === 'skip') { skipped++; return; }
+            if (mode === 'replace') {
+              const nm = NOTES[nkey()] || {};
+              Object.keys(nm).forEach(k => {
+                const ln = +k;
+                if (ln >= x.from && ln <= x.to) delete nm[k];
+              });
+              const same = rangesOf().filter(r => r.from === x.from && r.to === x.to);
+              same.forEach(r => { r.text = x.text; r.author = 'ai'; r.status = 'draft'; });
+              if (same.length) { replaced++; }
+              else if (addRange(x.from, x.to, x.text, 'ai')) added++;
+              saveAll(); saveRanges();
+              renderCode();
+              return;
+            }
+            if (addRange(x.from, x.to, x.text, 'ai')) added++;
+          });
+          toast('写入 ' + added + ' 条' + (replaced ? '，更新 ' + replaced + ' 条' : '') +
+                (skipped ? '，跳过 ' + skipped + ' 条' : ''));
+          out.querySelector('.ai-result').innerHTML =
+            '<p class="dim">已写入 ' + (added + replaced) + ' 条，跳过 ' + skipped +
+            ' 条，可在代码区审阅。</p>';
         };
         out.querySelector('#aiAgain').onclick = () => { out.remove(); runAction(act); };
       })

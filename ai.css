@@ -169,3 +169,25 @@ body.ai-open .view{right:368px}
 .ai-diag{font:10.5px/1.7 var(--mono);color:var(--tx2);background:var(--surface-soft);
   border:1px solid var(--edge);border-radius:7px;padding:9px;margin-top:8px;
   white-space:pre-wrap;max-height:230px;overflow:auto}
+
+/* AI 结果与已有批注重叠时的选择 */
+.ai-item.overlap{background:color-mix(in srgb,#e0a04a 8%,transparent);border-radius:7px;padding:7px 6px}
+.ai-item-body{min-width:0;flex:1}
+.ai-item-text{line-height:1.65}
+.ai-conflict{margin-top:7px;border-top:1px dashed var(--edge);padding-top:7px;
+  font-size:11.5px;color:var(--tx2)}
+.ai-conflict-head{color:#b4762c;margin-bottom:5px;line-height:1.55}
+.ai-conflict label{display:flex;align-items:flex-start;gap:6px;padding:2px 0;cursor:pointer;line-height:1.55}
+.ai-conflict input{margin-top:3px;accent-color:var(--accent);flex:none}
+
+/* 行选择 */
+.line.rowsel{background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.line.rowsel-edge{background:color-mix(in srgb,var(--accent) 15%,transparent)}
+.rowsel-bar{position:fixed;z-index:60;display:flex;align-items:center;gap:4px;
+  background:var(--surface);border:1px solid var(--edge);border-radius:9px;
+  padding:4px 6px;box-shadow:0 10px 30px -14px #0b122099;font-size:12px}
+.rowsel-bar .rs-label{font:11px var(--mono);color:var(--muted);padding:0 6px}
+.rowsel-bar button{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;
+  border-radius:6px;color:var(--tx2);border:0;background:transparent;font-size:12px}
+.rowsel-bar button:hover{background:var(--surface-soft);color:var(--ink)}
+.rowsel-bar .ic{width:13px;height:13px}

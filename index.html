@@ -353,9 +353,9 @@
     .splitter{left:calc(100% - var(--notew,384px) - 21px)}
   }
 </style>
-<link rel="stylesheet" href="ui-refresh.css?v=20261105m">
-<link rel="stylesheet" href="presets.css?v=20261105m">
-<link rel="stylesheet" href="ai.css?v=20261105m">
+<link rel="stylesheet" href="ui-refresh.css?v=20261105n">
+<link rel="stylesheet" href="presets.css?v=20261105n">
+<link rel="stylesheet" href="ai.css?v=20261105n">
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><defs><symbol id="i-sparkles" viewBox="0 0 24 24">
@@ -537,7 +537,7 @@
     <div class="sep"></div>
     <button role="menuitem" id="btnReset" class="dang"><svg class="ic"><use href="#i-rotate-ccw"/></svg>重置数据</button>
     <div class="sep"></div>
-    <div class="ver" id="buildVer">构建 20261105-0610</div>
+    <div class="ver" id="buildVer">构建 20261105-0700</div>
   </div>
 </div>
 
@@ -633,7 +633,7 @@
 <div id="mask"><div class="dlg" id="dlgBody"></div></div>
 <div id="toast"></div>
 
-<script src="indent.js?v=20261105m"></script>
+<script src="indent.js?v=20261105n"></script>
 <script>
 /* ============================================================
    数据
@@ -658,7 +658,19 @@ const PROJECTS = {
         'def load(path):','    with open(path) as f:',
         '        rows = [normalize(x) for x in f if x.strip()]','    return rows','',
         'data = load("log.txt")','print(json.dumps(data, ensure_ascii=False))']},
+      'sat_defs.svh': {path:'rtl/sat_defs.svh', lang:'verilog', lines:[
+        '`ifndef SAT_DEFS_SVH','`define SAT_DEFS_SVH','',
+        "`define WIDTH 32","`define SAT_MAX 32'hFFFF_FFFF",'',
+        '`endif']},
+
+      'tb_alu.sv': {path:'rtl/tb_alu.sv', lang:'verilog', lines:[
+        'module tb_alu;','  logic [31:0] a, b, y;','','  sat_alu u_dut (',
+        '    .a_i(a),','    .b_i(b),','    .y_o(y)','  );','',
+        '  initial begin','    a = 32\'d1; b = 32\'d2;','    #10 $display("y=%0d", y);','  end','',
+        'endmodule']},
+
       'sat_alu.sv': {path:'rtl/sat_alu.sv', lang:'verilog', lines:[
+        '`include "sat_defs.svh"','',
         'module sat_alu (','    input  logic [31:0] a_i,','    input  logic [31:0] b_i',
         '    output logic [31:0] y_o',');','',
         '  function automatic logic [31:0] sat_add(','      input logic [31:0] a,',
@@ -2690,10 +2702,11 @@ document.addEventListener('keydown',e=>{
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();
 </script>
-<script src="ui-refresh.js?v=20261105m"></script>
-<script src="ai.js?v=20261105m"></script>
-<script src="rowselection.js?v=20261105m"></script>
-<script src="multiselect.js?v=20261105m"></script>
-<script src="textsel.js?v=20261105m"></script>
+<script src="ui-refresh.js?v=20261105n"></script>
+<script src="ai.js?v=20261105n"></script>
+<script src="rowselection.js?v=20261105n"></script>
+<script src="multiselect.js?v=20261105n"></script>
+<script src="textsel.js?v=20261105n"></script>
+<script src="graph.js?v=20261105n"></script>
 </body>
 </html>

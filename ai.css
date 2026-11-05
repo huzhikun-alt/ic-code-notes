@@ -306,3 +306,13 @@ html[data-note-mode="side"] .nb:has(.achip){padding-right:140px}
 .line .cl .num,.line .cl .src{align-self:center}
 /* 空行也要有高度，否则点不到 */
 .line .src[contenteditable="true"]{min-height:20px}
+
+/* 进入编辑的那一行要一直“亮着”，不能比悬停还淡 */
+.line:hover{background:color-mix(in srgb,var(--ink) 3.5%,transparent)}
+.line.editing{
+  background:color-mix(in srgb,var(--accent) 10%,transparent);
+  box-shadow:inset 3px 0 0 var(--accent);
+  border-radius:0 6px 6px 0;
+}
+.line.editing .num{color:var(--accent);font-weight:600}
+.line.editing .src{caret-color:var(--accent)}

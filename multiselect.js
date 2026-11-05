@@ -88,33 +88,112 @@
   }
   window.icDeleteRange = deleteRange;
 
-  /* ---------- 3. Delete / Backspace：选中的是整行就删行 ---------- */
+  /* ---------- 3. 删除选中的文字（像文本框那样，只删选中的部分） ---------- */
+  function colInRow(row, node, offset, srcCache) {
+    const src = (srcCache && srcCache.get(row)) || row.querySelector('.src');
+    if (!src) return 0;
+    if (srcCache) srcCache.set(row, src);
+    try {
+      const r = document.createRange();
+      r.selectNodeContents(src);
+      r.setEnd(node, offset);
+      return r.toString().length;
+    } catch (err) { return 0; }
+  }
+
+  function deleteText(si, sc, ei, ec) {
+    const f = files()[cur];
+    const rowsEl = rows();
+    const startRow = rowsEl[si], endRow = rowsEl[ei];
+    if (!startRow || !endRow) return;
+
+    const cache = new Map();
+    const sel = window.getSelection();
+    const range = sel.getRangeAt(0);
+    const scReal = colInRow(startRow, range.startContainer, range.startOffset, cache);
+    const ecReal = colInRow(endRow, range.endContainer, range.endOffset, cache);
+
+    snapshot('删除选中的文字');
+
+    const a = f.lines[si] || '', b = f.lines[ei] || '';
+    const merged = a.slice(0, scReal) + b.slice(ecReal);
+
+    /* 批注：中间整行删掉，尾行之后的批注整体上移 */
+    const nm = NOTES[nkey()];
+    if (nm) {
+      const out = {};
+      Object.keys(nm).forEach(k => {
+        const ln = +k;
+        if (ln >= si + 2 && ln <= ei + 1) return;            // 整行消失 → 批注一起删
+        if (ln === si + 1 || ln === ei + 1) {                 // 首尾行合并 → 只更新指纹
+          out[si + 1] = nm[k];
+          out[si + 1].fp = hashLine(merged);
+          return;
+        }
+        out[ln > ei + 1 ? ln - (ei - si) : ln] = nm[k];
+      });
+      NOTES[nkey()] = out;
+    }
+
+    f.lines.splice(si, ei - si + 1, merged);
+    if (!f.lines.length) f.lines = [''];
+    saveAll();
+    renderCode();
+  }
+
   document.addEventListener('keydown', e => {
     if (e.key !== 'Delete' && e.key !== 'Backspace') return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-    /* 正在编辑文字时不接管 */
     const ae = document.activeElement;
     if (ae && (ae.classList.contains('body') || ae.classList.contains('ctext') || ae.classList.contains('rg-body'))) return;
 
-    /* 行选择模式 */
+    /* 行号栏选中的整行 → 删整行 */
     const rs = window.__rowSelection ? window.__rowSelection() : null;
-    if (rs && (rs.to > rs.from)) {
+    if (rs && rs.to > rs.from) {
       e.preventDefault();
       deleteRange(rs.from, rs.to);
       return;
     }
 
+    /* 其余情况按“选中的文字”删除 */
     const sel = window.getSelection();
     if (!sel || !sel.rangeCount || sel.isCollapsed) return;
-    const a = rowIndexOf(sel.anchorNode), b = rowIndexOf(sel.focusNode);
-    if (a < 1 || b < 1) return;
-    if (a === b) return;                               // 单行内交给浏览器
-    if (editingLine >= 0) leaveEditMode();
+    const range = sel.getRangeAt(0);
+    const si = rowIndexOf(range.startContainer) - 1;
+    const ei = rowIndexOf(range.endContainer) - 1;
+    if (si < 0 || ei < 0) return;
     e.preventDefault();
-    deleteRange(Math.min(a, b), Math.max(a, b));
+    deleteText(si, 0, ei, 0);
   });
 
+
+  /* ---------- 5. 跨行选区：给涉及的行加底色 ---------- */
+  function paintTextRows() {
+    const sel = window.getSelection();
+    const all = rows();
+    if (!sel || !sel.rangeCount || sel.isCollapsed) {
+      all.forEach(r => r.classList.remove('linesel'));
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    const a = rowIndexOf(range.startContainer), b = rowIndexOf(range.endContainer);
+    if (a < 1 || b < 1) { all.forEach(r => r.classList.remove('linesel')); return; }
+    const lo = Math.min(a, b), hi = Math.max(a, b);
+    all.forEach((r, i) => {
+      const ln = i + 1;
+      r.classList.toggle('linesel', ln >= lo && ln <= hi);
+    });
+  }
+
+  document.addEventListener('selectionchange', () => {
+    clearTimeout(window.__selPaintTimer);
+    window.__selPaintTimer = setTimeout(paintTextRows, 40);
+  });
+  document.addEventListener('mouseup', () => setTimeout(paintTextRows, 20));
+  document.addEventListener('mousedown', () => {
+    rows().forEach(r => r.classList.remove('linesel'));
+  }, true);
   /* 下次点击时把延迟的重绘补上 */
   codeEl.addEventListener('mousedown', () => {
     if (window.__needsRender) { window.__needsRender = false; renderCode(); }

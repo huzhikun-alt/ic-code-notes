@@ -304,3 +304,5 @@ html[data-note-mode="side"] .nb:has(.achip){padding-right:140px}
 /* 代码行的文字要在 30px 行高里真正垂直居中 */
 .line .cl{align-items:center}
 .line .cl .num,.line .cl .src{align-self:center}
+/* 空行也要有高度，否则点不到 */
+.line .src[contenteditable="true"]{min-height:20px}

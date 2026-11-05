@@ -270,7 +270,9 @@ html[data-note-mode="side"] .nb:has(.achip){padding-right:140px}
 .textsel-bar .ic{width:13px;height:13px}
 
 /* 选中文字的背景更明显一点 */
-#code ::selection,#code ::-moz-selection{background:color-mix(in srgb,var(--accent) 38%,transparent);color:inherit}
+#code ::selection{background:color-mix(in srgb,var(--accent) 42%,transparent);color:inherit}
+#code::-moz-selection{background:color-mix(in srgb,var(--accent) 42%,transparent)}
+#code *::-moz-selection{background:color-mix(in srgb,var(--accent) 42%,transparent)}
 #code .fx::selection{background:color-mix(in srgb,var(--accent) 42%,transparent)}
 
 /* 选中高亮贴合文字：行高 30px 的框太大，文字本身收紧到 ~19px */
@@ -318,5 +320,15 @@ html[data-note-mode="side"] .nb:has(.achip){padding-right:140px}
 .line.editing .src{caret-color:var(--accent)}
 
 /* 文字选区涉及到的行，给一层淡淡底色 */
-.line.linesel{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.line.linesel{background:color-mix(in srgb,var(--accent) 3.5%,transparent)}
 .line.linesel .num{color:var(--accent)}
+
+/* 代码区一律是文本光标；按钮另算 */
+#code{cursor:text}
+#code .line{cursor:text}
+#code .line .src,#code .line .src *,#code .line .cl{cursor:text!important}
+#code .line.editing,#code .line.editing *{cursor:text!important}
+#code .line .num{cursor:default!important}
+#code .nb .h button,#code button,#code .nb .cdel{cursor:pointer!important}
+#code .nb .body,#code .nb .ctext,#code .nb .rg-body{cursor:text!important}
+#code .line .num,#code .line.editing .num,#code .line .num *{cursor:default!important}

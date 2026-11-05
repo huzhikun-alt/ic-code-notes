@@ -300,3 +300,7 @@ html[data-note-mode="side"] .nb:has(.achip){padding-right:140px}
 .legend .ln{display:inline-block;width:16px;height:0;border-top:1.5px solid #b9c4d4;margin-right:5px;vertical-align:3px}
 .legend .ln.miss{border-top-style:dashed;border-color:#c06a80}
 .legend .sep{width:1px;height:12px;background:var(--edge)}
+
+/* 代码行的文字要在 30px 行高里真正垂直居中 */
+.line .cl{align-items:center}
+.line .cl .num,.line .cl .src{align-self:center}

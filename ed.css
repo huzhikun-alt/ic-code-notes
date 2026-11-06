@@ -15,7 +15,7 @@
 .ed-hl{margin:0;padding:16px 24px 60px;font:13px/22px var(--mono);
   white-space:pre;color:var(--ink);pointer-events:none;tab-size:4;
   position:absolute;top:0;left:0;will-change:transform}
-.ed-input{position:absolute;inset:0;width:100%;height:100%;margin:0;
+.ed-input{position:absolute;inset:0;width:100%;height:100%;margin:0;z-index:2;
   padding:16px 24px 60px;border:0;outline:none;resize:none;background:transparent;
   color:transparent;caret-color:var(--ink);font:13px/22px var(--mono);
   white-space:pre;overflow:auto;tab-size:4}
@@ -82,13 +82,13 @@
 .mind-dep:hover{opacity:.9}
 .mind-tip .mt-hint{margin-top:6px;font-size:10.5px;color:var(--muted);border-top:1px dashed var(--edge);padding-top:5px}
 
-/* 缩进参考线（括号作用域） */
+/* 缩进参考线（每级一条；颜色随主题，不用 opacity 压淡） */
 .ed-guides{position:absolute;left:0;top:0;pointer-events:none;z-index:1;overflow:visible}
-.ed-guides .gline{stroke:#c8d2e0;stroke-width:1;opacity:1}
-.ed-guides .gline.d1{stroke:#c2cddd}
-.ed-guides .gline.d2{stroke:#b9c6d9}
-.ed-guides .gline.d3{stroke:#b0bfd5}
-.ed-guides .gline.d4{stroke:#a7b8d0}
+.ed-guides .gline{stroke:color-mix(in srgb,var(--ink) 18%,var(--paper));stroke-width:1;
+  shape-rendering:crispEdges}
+.ed-guides .gline.active{stroke:color-mix(in srgb,var(--ink) 55%,var(--paper))}
+.ed-guides .fold{fill:none;stroke:color-mix(in srgb,var(--ink) 55%,var(--paper));
+  stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round}
 
 /* 旧控件隐藏（回归修复） */
 #noteMode,#splitter,#btnRawEdit,#raw,.editbar{display:none!important}

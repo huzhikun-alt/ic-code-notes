@@ -81,3 +81,15 @@
 .mind-dep{fill:none;stroke:#7c6bd6;stroke-width:1.2;stroke-dasharray:5 4;opacity:.5}
 .mind-dep:hover{opacity:.9}
 .mind-tip .mt-hint{margin-top:6px;font-size:10.5px;color:var(--muted);border-top:1px dashed var(--edge);padding-top:5px}
+
+/* 缩进参考线（括号作用域） */
+.ed-guides{position:absolute;left:0;top:0;pointer-events:none;z-index:1;overflow:visible}
+.ed-guides .gline{stroke:#c8d2e0;stroke-width:1;opacity:1}
+.ed-guides .gline.d1{stroke:#c2cddd}
+.ed-guides .gline.d2{stroke:#b9c6d9}
+.ed-guides .gline.d3{stroke:#b0bfd5}
+.ed-guides .gline.d4{stroke:#a7b8d0}
+
+/* 旧控件隐藏（回归修复） */
+#noteMode,#splitter,#btnRawEdit,#raw,.editbar{display:none!important}
+.code.ed-host{padding:0!important;overflow:hidden}

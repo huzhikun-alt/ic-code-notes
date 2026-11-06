@@ -125,10 +125,12 @@
       f.lines.length + ' 行 · ' + Object.keys(noteMap()).length + ' 条笔记';
   }
 
+  const afterHooks = [];
   function paintAll() {
     paintHighlight();
     paintGutter();
     syncScroll();
+    afterHooks.forEach(fn => { try { fn(); } catch (e) {} });
   }
 
   function paintHighlight() {
@@ -409,6 +411,7 @@
 
   /* ---------------- 挂到全局 ---------------- */
   window.ED = {
+    afterRender(fn) { afterHooks.push(fn); },
     render, addNote, putNote, noteAt, removeNote, caretLine, gotoLine, selectedLines,
     focusBody(line) {
       if (typeof openNoteEditor === 'function') openNoteEditor(line);

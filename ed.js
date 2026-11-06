@@ -9,7 +9,7 @@
   const NOTE_W = 340;
 
   let built = false;
-  let host, ta, hl, gutter, notesCol, notesInner, splitter;
+  let host, ta, hl, gutter;
 
   const $ = s => document.querySelector(s);
   const curFile = () => (hasFile() ? files()[cur] : null);
@@ -32,22 +32,19 @@
         '<textarea class="ed-input" id="edInput" spellcheck="false" autocapitalize="off" ' +
           'autocomplete="off" wrap="off"></textarea>' +
       '</div>' +
-      '<div class="ed-notes"><div class="ed-notes-in" id="edNotes"></div></div>';
+      '';
     host.appendChild(wrap);
 
     ta = $('#edInput');
     hl = $('#edHl');
     gutter = $('#edGutter');
-    notesCol = host.querySelector('.ed-notes');
-    notesInner = $('#edNotes');
 
     ta.addEventListener('input', onInput);
     ta.addEventListener('scroll', syncScroll);
     ta.addEventListener('keydown', onKey);
-    ta.addEventListener('click', () => { paintNotes(true); paintCaretInfo(); });
+    ta.addEventListener('click', () => { paintCaretInfo(); });
     ta.addEventListener('keyup', paintCaretInfo);
 
-    notesCol.addEventListener('dblclick', onNotesDblClick);
 
     built = true;
   }
@@ -58,7 +55,6 @@
     const x = ta.scrollLeft, y = ta.scrollTop;
     hl.style.transform = 'translate(' + (-x) + 'px,' + (-y) + 'px)';
     gutter.style.transform = 'translateY(' + (-y) + 'px)';
-    notesInner.style.transform = 'translateY(' + (-y) + 'px)';
   }
 
   /* ---------------- 锚点：按内容指纹跟随代码 ---------------- */
@@ -132,7 +128,6 @@
   function paintAll() {
     paintHighlight();
     paintGutter();
-    paintNotes();
     syncScroll();
   }
 
@@ -175,98 +170,6 @@
     gutter.textContent = s;
   }
 
-  /* ---------------- 笔记列（已停用：笔记改为行内注释渲染） ---------------- */
-  function paintNotes(keepFocus) {
-    if (notesInner) notesInner.innerHTML = '';
-  }
-  function buildNote(line, note) {
-    const el = document.createElement('div');
-    el.className = 'ed-note' + (note.author === 'ai' ? ' ai' : '') + (note.kind === 'comment' ? ' cmt' : '');
-    el.dataset.id = note.id;
-    el.dataset.line = line;
-    el.tabIndex = 0;
-
-    const head = document.createElement('div');
-    head.className = 'ed-note-head';
-    const tag = document.createElement('span');
-    tag.className = 'ed-note-tag';
-    tag.textContent = 'L' + line;
-    head.appendChild(tag);
-    el.appendChild(head);
-
-    const body = document.createElement('div');
-    body.className = 'ed-note-body';
-    body.contentEditable = 'true';
-    body.textContent = note.text || '';
-    el.appendChild(body);
-
-    if (note.extracted) {
-      const x = document.createElement('div');
-      x.className = 'ed-note-extracted';
-      x.textContent = note.extracted;
-      el.appendChild(x);
-    }
-
-    body.addEventListener('input', () => {
-      if (!note._touched) { note._touched = true; snapshot('编辑笔记'); }
-      note.text = body.innerText;
-      note.updatedAt = Date.now();
-      saveAll();
-      el.style.height = 'auto';
-    });
-
-    body.addEventListener('keydown', ev => {
-      if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); body.blur(); }
-      else if (ev.key === 'Escape') { body.blur(); }
-    });
-
-    body.addEventListener('blur', () => {
-      note._touched = false;
-      if (!String(note.text || '').trim()) {
-        snapshot('删除笔记');
-        delete noteMap()[line];
-        saveAll();
-        render();
-      }
-    });
-
-    body.addEventListener('dblclick', () => {
-      const r = document.createRange(); r.selectNodeContents(body);
-      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
-    });
-
-    el.addEventListener('mousedown', ev => {
-      if (ev.target.closest('.ed-note-body')) return;
-      ev.preventDefault();
-      el.classList.add('focused');
-      el.focus();
-    });
-
-    el.addEventListener('keydown', ev => {
-      if (document.activeElement === el && (ev.key === 'Delete' || ev.key === 'Backspace')) {
-        ev.preventDefault();
-        snapshot('删除笔记');
-        delete noteMap()[line];
-        saveAll();
-        render();
-      }
-    });
-
-    el.addEventListener('focusin', () => el.classList.add('focused'));
-    el.addEventListener('focusout', () => el.classList.remove('focused'));
-
-    return el;
-  }
-
-  /* 空白处双击：在这一行的位置新建笔记 */
-  function onNotesDblClick(ev) {
-    if (ev.target.closest('.ed-note')) return;
-    const rect = notesInner.getBoundingClientRect();
-    const y = ev.clientY - rect.top - PAD_T;
-    const line = Math.max(1, Math.min(curFile().lines.length, Math.round(y / LH) + 1));
-    addNote(line);
-  }
-
   /* ---------------- 编辑 ---------------- */
   function onInput() {
     const f = curFile(); if (!f) return;
@@ -289,7 +192,6 @@
     resolveAnchors(f);
     paintHighlight();
     paintGutter();
-    paintNotes();
     paintCaretInfo();
   }
 
@@ -365,8 +267,7 @@
     }
     saveAll();
     render();
-    const card = notesInner.querySelector('.ed-note[data-line="' + line + '"] .ed-note-body');
-    if (card) requestAnimationFrame(() => card.focus());
+    if (!(opts && opts.quiet) && typeof openNoteEditor === 'function') requestAnimationFrame(() => openNoteEditor(line));
     return nm[line];
   }
 
@@ -510,8 +411,7 @@
   window.ED = {
     render, addNote, putNote, noteAt, removeNote, caretLine, gotoLine, selectedLines,
     focusBody(line) {
-      const c = notesInner && notesInner.querySelector('.ed-note[data-line="' + line + '"] .ed-note-body');
-      if (c) c.focus();
+      if (typeof openNoteEditor === 'function') openNoteEditor(line);
     }
   };
 

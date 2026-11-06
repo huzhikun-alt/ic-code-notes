@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    代码编辑面 + 笔记列
    ============================================================ */
 .ed-host{position:absolute;left:0;right:0;top:56px;bottom:0;overflow:hidden}
@@ -22,37 +22,6 @@
 .ed-input::selection{background:color-mix(in srgb,var(--accent) 30%,transparent)}
 .ed-input::-moz-selection{background:color-mix(in srgb,var(--accent) 30%,transparent)}
 
-/* 笔记列 */
-.ed-notes{width:340px;flex:none;overflow:hidden;position:relative;
-  border-left:1px solid var(--edge);background:var(--paper)}
-.ed-notes-in{position:relative;padding:0;will-change:transform}
-.ed-notes::before{content:"";position:absolute;inset:0;pointer-events:none}
-
-.ed-note{position:absolute;left:0;right:12px;padding:0 0 0 10px;
-  border-left:3px solid var(--accent);background:transparent;
-  border-radius:0 4px 4px 0;cursor:text}
-.ed-note.cmt{border-left-color:#9db3c6}
-.ed-note.ai{border-left-color:#7c6bd6}
-.ed-note.focused,.ed-note:focus-within{outline:1px solid color-mix(in srgb,var(--accent) 40%,transparent);
-  outline-offset:1px}
-.ed-note-head{display:flex;gap:6px;align-items:center;height:0;overflow:visible}
-.ed-note-tag{font:9px/1 var(--mono);color:var(--muted);background:var(--paper);
-  padding:0 3px;transform:translateY(-4px);display:none}
-.ed-note.focused .ed-note-tag,.ed-note:focus-within .ed-note-tag{display:inline-block}
-.ed-note-body{font-size:12.5px;line-height:19px;color:var(--note-ink);
-  white-space:pre-wrap;overflow-wrap:anywhere;outline:none;min-height:19px;
-  padding:1px 0}
-.ed-note-body:empty::before{content:"写点什么…";color:var(--muted)}
-.ed-note-extracted{margin-top:3px;font-size:11px;color:var(--dim);
-  border-top:1px dashed var(--edge);padding-top:3px}
-
-/* 选中笔记文字 */
-.ed-note ::selection{background:color-mix(in srgb,var(--accent) 28%,transparent)}
-
-/* ===== 编辑器 v2 收尾：隐藏不再适用的旧控件 ===== */
-#noteMode,#splitter,#btnRawEdit,#raw,.editbar{display:none!important}
-.code.ed-host{padding:0!important;overflow:hidden}
-
 /* 光标所在函数提示条 */
 .ed-fnbar{position:absolute;left:16px;bottom:10px;right:24px;z-index:5;
   display:none;align-items:center;gap:8px;padding:5px 10px;border-radius:7px;
@@ -64,21 +33,9 @@
 .ed-fnbar span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* 笔记的行号标识：默认极淡，聚焦时清楚 */
-.ed-note-tag{display:inline-block!important;opacity:.45}
-.ed-note.focused .ed-note-tag,.ed-note:focus-within .ed-note-tag{opacity:1}
 
 /* 笔记与代码行基线对齐；被挤下去时才显示行号 */
-.ed-note{padding:0 0 0 10px}
-.ed-note-body{line-height:22px;font-size:12.5px;padding:0}
-.ed-note-head{position:static;height:0}
-.ed-note-tag{display:none}
-.ed-note.pushed .ed-note-tag{display:block;position:absolute;left:10px;top:-11px;
-  font:9px/1 var(--mono);color:var(--muted)}
 /* 选中状态：不再画边框，只加深左侧色条 */
-.ed-note.focused,.ed-note:focus-within{outline:none}
-.ed-note.focused::before,.ed-note:focus-within::before{
-  content:"";position:absolute;left:-3px;top:0;bottom:0;width:3px;background:var(--accent);opacity:.5}
-.ed-note-body:focus{background:color-mix(in srgb,var(--accent) 5%,transparent);border-radius:3px}
 
 /* ===== 结构图（思维导图） ===== */
 .mindwrap{position:absolute;inset:56px 0 0;overflow:auto;background:var(--paper)}
@@ -111,7 +68,6 @@
 .mind-tip .mt-body{color:var(--tx2)}
 
 /* 笔记改为贴着代码的行内注释：右侧列隐藏 */
-.ed-notes{display:none!important}
 .ed-main{flex:1}
 .nl-inline{color:var(--t-c,#7a8798);font-style:normal;opacity:.92}
 .nl-inline.ai{color:#7c6bd6;opacity:.9}
@@ -120,3 +76,8 @@
   font:12.5px/1.6 var(--mono);color:var(--note-ink);background:var(--paper);
   border:1px solid var(--accent);border-radius:6px;padding:6px 8px;outline:none;
   box-shadow:0 10px 28px -16px #0b1220a0}
+
+/* 结构图里的依赖箭头 */
+.mind-dep{fill:none;stroke:#7c6bd6;stroke-width:1.2;stroke-dasharray:5 4;opacity:.5}
+.mind-dep:hover{opacity:.9}
+.mind-tip .mt-hint{margin-top:6px;font-size:10.5px;color:var(--muted);border-top:1px dashed var(--edge);padding-top:5px}

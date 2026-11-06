@@ -23,7 +23,7 @@
 
   function addRange(from, to, text, author){
     if (typeof window.ED === 'undefined') return null;
-    return window.ED.addNote(from, text, { author: author || 'me', rangeEnd: to > from ? to : null });
+    return window.ED.addNote(from, text, { author: author || 'me', rangeEnd: to > from ? to : null, quiet: true });
   }  window.icAddRange = addRange;
 
   /* ---------------- 范围批注渲染 ---------------- */

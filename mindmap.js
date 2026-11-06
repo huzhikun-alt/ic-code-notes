@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    项目结构思维导图
    工程 → 文件 → 符号（module / function / sub / def）
    节点悬停显示作用说明
@@ -37,6 +37,7 @@
     const idx = {};
     Object.values(f).forEach(x => { idx[base(x.path)] = x.path; });
     const counts = {};
+    const edges = [];
     Object.values(f).forEach(x => {
       x.lines.forEach(l => {
         let m = l.match(/(?:require|use|do)\s+['"]?([^'";\s]+)/) ||
@@ -46,17 +47,20 @@
         const raw = m[1] || m[2];
         if (!raw) return;
         const target = idx[base(raw)] || idx[base(raw) + '.pl'] || idx[base(raw) + '.sv'];
-        if (target) counts[target] = (counts[target] || 0) + 1;
+        if (!target || target === x.path) return;
+        counts[target] = (counts[target] || 0) + 1;
+        const key = x.path + '→' + target;
+        if (!edges.some(e => e.key === key)) edges.push({ key, from: x.path, to: target });
       });
     });
-    return counts;
+    return { counts, edges };
   }
 
   const base = p => p.split('/').pop();
 
   function buildTree() {
     const f = files();
-    const refs = refCounts();
+    const { counts: refs, edges: deps } = refCounts();
     const root = { id: '#root', label: curProj, kind: 'project', children: [] };
 
     const byDir = {};
@@ -87,6 +91,7 @@
       });
       root.children.push(group);
     });
+    root.deps = deps;
     return root;
   }
 
@@ -165,11 +170,42 @@
       g.addEventListener('mousemove', ev => moveTip(ev));
       g.addEventListener('mouseleave', hideTip);
       g.addEventListener('dblclick', () => openNode(n));
+      g.addEventListener('contextmenu', ev => {
+        ev.preventDefault();
+        editDescription(n);
+      });
       svg.appendChild(g);
     });
 
     host.innerHTML = '';
     host.appendChild(svg);
+
+    /* 依赖箭头：文件之间的引用关系（虚线） */
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    defs.innerHTML = '<marker id="mindArrow" viewBox="0 0 10 10" refX="9" refY="5" ' +
+      'markerWidth="6" markerHeight="6" orient="auto">' +
+      '<path d="M0,0 L10,5 L0,10 z" fill="#7c6bd6"/></marker>';
+    svg.appendChild(defs);
+
+    const byPath = {};
+    nodes.forEach(n => {
+      if (n.kind !== 'file') return;
+      byPath[n.fileKey] = n;
+      const f = files()[n.fileKey];
+      if (f) byPath[f.path] = n;          // 依赖边用的是完整路径
+    });
+    ((root.deps) || []).forEach(d => {
+      const a = byPath[d.from], b = byPath[d.to];
+      if (!a || !b) return;
+      const x1 = a.x + a.w / 2, y1 = a.y + W.nodeH + 9;
+      const x2 = b.x + b.w / 2, y2 = b.y + W.nodeH + 9;
+      const midY = (y1 + y2) / 2 + 34;
+      const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.setAttribute('d', `M${x1},${y1} Q${(x1 + x2) / 2},${midY} ${x2},${y2}`);
+      p.setAttribute('class', 'mind-dep');
+      p.setAttribute('marker-end', 'url(#mindArrow)');
+      svg.appendChild(p);
+    });
     const stat = document.getElementById('mindStat');
     if (stat) {
       const filesN = Object.keys(files()).length;
@@ -219,6 +255,12 @@
     tip.querySelector('b').textContent = d.title;
     tip.querySelector('i').textContent = d.kind;
     tip.querySelector('.mt-body').textContent = d.body;
+    if (n.kind !== 'file' && n.kind !== 'dir' && n.kind !== 'project' && n.kind !== 'more') {
+      const hint = document.createElement('div');
+      hint.className = 'mt-hint';
+      hint.textContent = '右键可编辑这条说明';
+      tip.appendChild(hint);
+    }
     tip.classList.add('on');
     moveTip(ev);
   }
@@ -245,6 +287,17 @@
       window.ED.render();
       if (n.line) setTimeout(() => window.ED.gotoLine && window.ED.gotoLine(n.line), 60);
     }
+  }
+
+  /* 右键：编辑这个符号在函数库里的说明 */
+  function editDescription(n) {
+    if (n.kind === 'file' || n.kind === 'dir' || n.kind === 'project' || n.kind === 'more') {
+      toast('文件级说明暂不支持编辑');
+      return;
+    }
+    hideTip();
+    const exists = (window.LIB && LIB[n.lang] || []).find(e => e.name === n.label) || null;
+    if (typeof openLibDialog === 'function') openLibDialog(n.label, exists, n.lang);
   }
 
   /* ---------------- 挂到「结构」视图 ---------------- */

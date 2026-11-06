@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN" data-theme="light" data-note-mode="inline" data-preset="paper">
 <head>
 <meta charset="utf-8">
@@ -353,9 +353,10 @@
     .splitter{left:calc(100% - var(--notew,384px) - 21px)}
   }
 </style>
-<link rel="stylesheet" href="ui-refresh.css?v=20261105s">
-<link rel="stylesheet" href="presets.css?v=20261105s">
-<link rel="stylesheet" href="ai.css?v=20261105s">
+<link rel="stylesheet" href="ui-refresh.css?v=20261106b">
+<link rel="stylesheet" href="presets.css?v=20261106b">
+<link rel="stylesheet" href="ai.css?v=20261106b">
+<link rel="stylesheet" href="ed.css?v=20261106a">
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><defs><symbol id="i-sparkles" viewBox="0 0 24 24">
@@ -537,7 +538,7 @@
     <div class="sep"></div>
     <button role="menuitem" id="btnReset" class="dang"><svg class="ic"><use href="#i-rotate-ccw"/></svg>重置数据</button>
     <div class="sep"></div>
-    <div class="ver" id="buildVer">构建 20261105-0910</div>
+    <div class="ver" id="buildVer">构建 20261106-1330</div>
   </div>
 </div>
 
@@ -591,6 +592,7 @@
         <span class="m" id="fmeta"></span>
         <select id="noteMode" class="mode-picker" aria-label="批注显示模式"><option value="inline">行末批注</option><option value="side">右侧对齐</option><option value="plain">纯代码</option></select>
         <button class="ai-toggle" id="aiToggle" title="AI 助手 (Ctrl+J)"><svg class="ic"><use href="#i-sparkles"/></svg>AI</button>
+        <button class="editbtn" id="btnAddNote" title="在当前行添加笔记"><svg class="ic"><use href="#i-pencil"/></svg>笔记</button>
         <button class="editbtn" id="btnRawEdit" title="在一个完整文本框里编辑整份代码"><svg class="ic"><use href="#i-file-code"/></svg>整段编辑</button>
       </div>
       <div class="code" id="code"></div>
@@ -633,7 +635,7 @@
 <div id="mask"><div class="dlg" id="dlgBody"></div></div>
 <div id="toast"></div>
 
-<script src="indent.js?v=20261105s"></script>
+<script src="indent.js?v=20261106b"></script>
 <script>
 /* ============================================================
    数据
@@ -2157,7 +2159,7 @@ codeEl.addEventListener('click', e=>{
   /* 拖动超过几个像素说明是在选文字，不要进入编辑 */
   if(downPt && (Math.abs(e.clientX-downPt.x)>4 || Math.abs(e.clientY-downPt.y)>4)) return;
   /* 单击就进编辑：不再因为有残留选区而失效，但保留按行选择的结果 */
-  if(window.__clearRowSelection) window.__clearRowSelection();
+
   let offset = null;
   const src = row.querySelector('.src');
   const caret = document.caretRangeFromPoint && document.caretRangeFromPoint(e.clientX, e.clientY);
@@ -2702,11 +2704,9 @@ document.addEventListener('keydown',e=>{
 /* init */
 renderProj(); renderNav(); renderCode(); renderLib();
 </script>
-<script src="ui-refresh.js?v=20261105s"></script>
-<script src="ai.js?v=20261105s"></script>
-<script src="rowselection.js?v=20261105s"></script>
-<script src="multiselect.js?v=20261105s"></script>
-<script src="textsel.js?v=20261105s"></script>
-<script src="graph.js?v=20261105s"></script>
+<script src="ui-refresh.js?v=20261106b"></script>
+<script src="ai.js?v=20261106b"></script>
+<script src="graph.js?v=20261106b"></script>
+<script src="ed.js?v=20261106a"></script>
 </body>
 </html>

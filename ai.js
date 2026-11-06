@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    AI 侧边栏 + 范围批注
    依赖 index.html 暴露的全局：files()/cur/curProj/NOTES/saveAll/
    renderCode/renderNav/snapshot/toast/openModal/esc/hashLine/nkey
@@ -22,48 +22,12 @@
   window.icRangesSet = arr => { RANGES[rkey()] = JSON.parse(JSON.stringify(arr || [])); saveRanges(); };
 
   function addRange(from, to, text, author){
-    if(from > to){ const t=from; from=to; to=t; }
-    if(typeof snapshot === 'function') snapshot(author === 'ai' ? '写入 AI 批注' : '新增范围批注');
-    const list = RANGES[rkey()] || (RANGES[rkey()] = []);
-    // 交叉检测
-    const cross = list.find(r => (from>r.from && from<r.to) !== (to>r.from && to<r.to));
-    if(cross){ toast('与已有批注 ' + cross.from + '–' + cross.to + ' 交叉，请调整范围'); return null; }
-    const item = {
-      id: 'r' + Date.now().toString(36),
-      from, to, text,
-      author: author || 'me',
-      status: author === 'ai' ? 'draft' : 'ok',
-      at: Date.now()
-    };
-    list.push(item); saveRanges();
-    renderCode();
-    return item;
-  }
-  window.icAddRange = addRange;
+    if (typeof window.ED === 'undefined') return null;
+    return window.ED.addNote(from, text, { author: author || 'me', rangeEnd: to > from ? to : null });
+  }  window.icAddRange = addRange;
 
   /* ---------------- 范围批注渲染 ---------------- */
-  function paintRanges(){
-    const codeEl = document.getElementById('code');
-    if(!codeEl) return;
-    const rows = [...codeEl.querySelectorAll('.line')];
-    const list = rangesOf();
-
-    list.forEach(r => {
-      for(let ln=r.from; ln<=r.to; ln++){
-        const row = rows[ln-1];
-        if(!row) continue;
-        row.classList.add('rng');
-        if(ln===r.from) row.classList.add('rng-start');
-        if(ln===r.to)   row.classList.add('rng-end');
-      }
-      const endRow = rows[r.to-1];
-      if(!endRow) return;
-      const slot = endRow.querySelector('.slot');
-      if(!slot) return;
-      slot.appendChild(buildRangeCard(r));
-    });
-  }
-
+  function paintRanges(){ /* 范围信息已并入统一笔记，不再画括号 */ }
   function buildRangeCard(r){
     const el = document.createElement('div');
     el.className = 'nb nb-range' + (r.author==='ai' ? ' ai' : '');
@@ -156,25 +120,13 @@
 
   /* 上下文摘要 */
   function selRange(){
-    const s = window.getSelection();
-    if(!s || !s.rangeCount || !s.toString().trim()){
-      // 没有文字选择时，回退到「按行选择」
-      const r = window.__rowSelection ? window.__rowSelection() : null;
-      return r || null;
+    if (window.ED && typeof window.ED.selectedLines === 'function') {
+      const r = window.ED.selectedLines();
+      if (r && r.text && r.text.trim()) return { from: r.from, to: r.to };
+      return null;
     }
-    const r = s.getRangeAt(0);
-    const rows = [...document.querySelectorAll('#code .line')];
-    const idxOf = node => {
-      const el = node.nodeType === 1 ? node : node.parentElement;
-      const row = el && el.closest('.line');
-      return row ? rows.indexOf(row) : -1;
-    };
-    let a = idxOf(r.startContainer), b = idxOf(r.endContainer);
-    if(a < 0 && b < 0) return null;
-    if(a < 0) a = b; if(b < 0) b = a;
-    return { from: Math.min(a,b)+1, to: Math.max(a,b)+1 };
+    return null;
   }
-
   function paintCtx(){
     const box = document.getElementById('aiCtx'); if(!box) return;
     const sel = selRange();
@@ -550,6 +502,7 @@
             const mode = readChoice(i, conflicts[i]);
             if (mode === 'skip') { skipped++; return; }
             if (mode === 'replace') {
+            if (window.ED && window.ED.putNote) { window.ED.putNote(x.from, x.text, {author:'ai', rangeEnd: x.to}); replaced++; return; }
               const nm = NOTES[nkey()] || {};
               Object.keys(nm).forEach(k => {
                 const ln = +k;

@@ -140,17 +140,29 @@
     const f = curFile(); if (!f) return;
     const names = new Set(((window.LIB || {})[f.lang] || []).map(x => x.name));
     const kws = new Set((window.KEYWORDS || {})[f.lang] || []);
+    const nm = NOTES[nkey()] || {};
+    const mark = (f.lang === 'verilog') ? '  // ' : '  # ';
     const out = [];
     for (let i = 0; i < f.lines.length; i++) {
       const line = f.lines[i];
-      if (!line) { out.push(' '); continue; }
       let html = '';
-      tokenize(line, f.lang).forEach(tk => {
-        let cls;
-        if (tk.t === 'id' && names.has(tk.v)) cls = 'fx';
-        else cls = 'tk-' + (tk.t === 'id' ? (kws.has(tk.v) ? 'k' : 'p') : tk.t);
-        html += '<span class="' + cls + '">' + esc(tk.v) + '</span>';
-      });
+      if (line) {
+        tokenize(line, f.lang).forEach(tk => {
+          let cls;
+          if (tk.t === 'id' && names.has(tk.v)) cls = 'fx';
+          else cls = 'tk-' + (tk.t === 'id' ? (kws.has(tk.v) ? 'k' : 'p') : tk.t);
+          html += '<span class="' + cls + '">' + esc(tk.v) + '</span>';
+        });
+      } else {
+        html = ' ';
+      }
+      const n = nm[i + 1];
+      if (n && String(n.text || '').trim()) {
+        const raw = String(n.text).replace(/\s+/g, ' ').trim();
+        const shown = raw.length > 72 ? raw.slice(0, 72) + '…' : raw;
+        html += '<span class="nl-inline' + (n.author === 'ai' ? ' ai' : '') + '">' +
+          esc(mark + shown) + '</span>';
+      }
       out.push(html);
     }
     hl.innerHTML = out.join('\n') + '\n';
@@ -163,48 +175,10 @@
     gutter.textContent = s;
   }
 
-  /* ---------------- 笔记列 ---------------- */
+  /* ---------------- 笔记列（已停用：笔记改为行内注释渲染） ---------------- */
   function paintNotes(keepFocus) {
-    const f = curFile(); if (!f || !notesInner) return;
-    const active = keepFocus ? document.activeElement.closest('.ed-note') : null;
-    const activeId = active && active.dataset.id;
-
-    const entries = [];
-    const nm = noteMap();
-    Object.keys(nm).forEach(k => {
-      const n = nm[k];
-      if (!n || typeof n !== 'object') return;
-      entries.push({ line: +k, note: n });
-    });
-    entries.sort((a, b) => a.line - b.line);
-
-    notesInner.innerHTML = '';
-    let lastBottom = 0;
-    const seen = new Set();
-
-    entries.forEach(({ line, note }) => {
-      const baseY = PAD_T + (line - 1) * LH;
-      let y = baseY;
-      const pushed = y < lastBottom + 3;
-      if (pushed) y = lastBottom + 3;
-
-      const card = buildNote(line, note);
-      card.style.top = y + 'px';
-      if (pushed) card.classList.add('pushed');
-      notesInner.appendChild(card);
-
-      lastBottom = y + card.offsetHeight;
-      seen.add(line);
-    });
-
-    notesInner.style.height = (PAD_T * 2 + f.lines.length * LH) + 'px';
-
-    if (activeId) {
-      const again = notesInner.querySelector('.ed-note[data-id="' + activeId + '"] .ed-note-body');
-      if (again) { again.focus(); }
-    }
+    if (notesInner) notesInner.innerHTML = '';
   }
-
   function buildNote(line, note) {
     const el = document.createElement('div');
     el.className = 'ed-note' + (note.author === 'ai' ? ' ai' : '') + (note.kind === 'comment' ? ' cmt' : '');
@@ -453,9 +427,74 @@
     }
   }
 
+  /* ---------------- 行内注释编辑器 ---------------- */
+  let nlEditor = null;
+  function closeNoteEditor() {
+    const box = nlEditor; nlEditor = null;
+    if (box && box.parentNode) box.parentNode.removeChild(box);
+  }
+  function openNoteEditor(line) {
+    const f = curFile(); if (!f) return;
+    closeNoteEditor();
+    const note = noteMap()[line];
+    const box = document.createElement('div');
+    box.className = 'nl-editor';
+    const area = document.createElement('textarea');
+    area.spellcheck = false;
+    area.value = note ? (note.text || '') : '';
+    area.placeholder = '写这一行的笔记…（Ctrl+Enter 保存，Esc 取消）';
+    box.appendChild(area);
+    host.querySelector('.ed-main').appendChild(box);
+
+    const top = PAD_T + (line - 1) * LH - ta.scrollTop;
+    box.style.top = Math.max(4, top) + 'px';
+    box.style.left = '24px';
+    nlEditor = box;
+    setTimeout(() => { area.focus(); area.setSelectionRange(area.value.length, area.value.length); }, 10);
+
+    const save = () => {
+      const text = area.value.trim();
+      const cur0 = noteMap()[line];
+      if (!text) {
+        if (cur0) { snapshot('删除笔记'); delete noteMap()[line]; saveAll(); }
+      } else if (!cur0 || (cur0.text || '') !== text) {
+        snapshot('编辑笔记');
+        if (!cur0) noteMap()[line] = {
+          id: 'n' + Date.now().toString(36), text, fp: hashLine(f.lines[line - 1] || ''),
+          anchorText: f.lines[line - 1] || '', kind: 'note', author: 'me',
+          createdAt: Date.now(), updatedAt: Date.now()
+        };
+        else { cur0.text = text; cur0.updatedAt = Date.now(); }
+        saveAll();
+      }
+      if (nlEditor === box) closeNoteEditor();
+      paintAll(); paintCaretInfo();
+    };
+
+    area.addEventListener('keydown', ev => {
+      if (ev.key === 'Escape') { ev.preventDefault(); closeNoteEditor(); area.blur(); }
+      if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); save(); }
+    });
+    area.addEventListener('blur', () => { if (nlEditor === box) save(); });
+  }
+  window.openNoteEditor = openNoteEditor;
+
   function caretLine() {
     const pos = ta ? ta.selectionStart : 0;
     return ta ? ta.value.slice(0, pos).split('\n').length : 1;
+  }
+
+  /* 跳到某一行并把光标放过去 */
+  function gotoLine(line) {
+    if (!ta) return;
+    const lines = ta.value.split('\n');
+    let pos = 0;
+    for (let i = 0; i < line - 1 && i < lines.length; i++) pos += lines[i].length + 1;
+    ta.focus();
+    ta.setSelectionRange(pos, pos);
+    ta.scrollTop = Math.max(0, (line - 1) * LH - 120);
+    syncScroll();
+    paintCaretInfo();
   }
 
   function selectedLines() {
@@ -469,7 +508,7 @@
 
   /* ---------------- 挂到全局 ---------------- */
   window.ED = {
-    render, addNote, putNote, noteAt, removeNote, caretLine, selectedLines,
+    render, addNote, putNote, noteAt, removeNote, caretLine, gotoLine, selectedLines,
     focusBody(line) {
       const c = notesInner && notesInner.querySelector('.ed-note[data-line="' + line + '"] .ed-note-body');
       if (c) c.focus();
@@ -479,9 +518,12 @@
   window.renderCode = render;
 
   const addBtn = document.getElementById('btnAddNote');
-  if (addBtn) addBtn.addEventListener('click', () => {
-    const line = (window.ED && ED.caretLine) ? ED.caretLine() : 1;
-    addNote(line);
+  if (addBtn) addBtn.addEventListener('click', () => openNoteEditor(caretLine()));
+  document.addEventListener('keydown', ev => {
+    if (ev.altKey && ev.ctrlKey && (ev.key === 'm' || ev.key === 'M')) {
+      ev.preventDefault();
+      openNoteEditor(caretLine());
+    }
   });
 
   /* 页面初始化脚本先跑了旧渲染，这里接管一次 */

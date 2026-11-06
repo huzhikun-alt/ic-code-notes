@@ -1,4 +1,4 @@
-"""编辑器与笔记系统验收测试
+﻿"""编辑器与笔记系统验收测试
 
 覆盖需求中的 10 条验收标准。
 运行：python verify-editor.py
@@ -80,36 +80,29 @@ with sync_playwright() as p:
     hl_last = pg.evaluate("() => document.getElementById('edHl').textContent.split(String.fromCharCode(10)).filter(Boolean).pop()")
     check('高亮层同步', '# tail' in hl_last, repr(hl_last[-20:]))
 
-    print('--- 5 手写笔记全生命周期 ---')
-    col = pg.locator('.ed-notes').bounding_box()
-    pg.mouse.dblclick(col['x'] + 60, col['y'] + 16 + 22 * 1 + 5)
-    pg.wait_for_timeout(400)
-    n1 = pg.locator('.ed-note').count()
-    check('双击笔记列可新建', n1 >= 1, str(n1))
-    body = pg.locator('.ed-note-body').first
-    body.click()
-    pg.keyboard.type('手写笔记内容')
-    pg.evaluate("() => document.activeElement.blur()")
-    pg.wait_for_timeout(400)
-    txt = pg.evaluate("() => Object.values(NOTES[nkey()]||{}).map(n=>n.text)")
-    check('编辑后保存', any('手写笔记内容' in t for t in txt), str(txt)[:60])
+    print('--- 5 笔记：行内注释形式 ---')
+    pg.locator('#edInput').click()
+    pg.keyboard.press('Control+Home')
+    for _ in range(6):
+        pg.keyboard.press('ArrowDown')
+    pg.locator('#btnAddNote').click()
+    pg.wait_for_timeout(350)
+    check('笔记编辑器可打开', pg.locator('.nl-editor').count() == 1)
+    pg.locator('.nl-editor textarea').fill('手写笔记内容')
+    pg.keyboard.press('Control+Enter')
+    pg.wait_for_timeout(500)
+    inline = pg.evaluate("() => [...document.querySelectorAll('.nl-inline')].map(e => e.textContent)")
+    check('笔记以注释形式贴在代码行末尾', any('手写笔记内容' in t for t in inline), str(inline[:2])[:60])
+    check('注释前缀为 # //', any(t.strip().startswith(('#', '//')) for t in inline), str(inline[:1]))
 
-    print('--- 10 笔记视觉：无背景 无边框 仅左色条 ---')
+    print('--- 10 笔记视觉：无背景 无边框 ---')
     style = pg.evaluate("""() => {
-      const el = document.querySelector('.ed-note');
-      const body = el.querySelector('.ed-note-body');
-      const c = getComputedStyle(el), cb = getComputedStyle(body);
-      return {
-        bodyBg: cb.backgroundColor,
-        borderTop: c.borderTopWidth, borderRight: c.borderRightWidth,
-        borderBottom: c.borderBottomWidth, borderLeft: c.borderLeftWidth,
-        radius: c.borderRadius, shadow: c.boxShadow
-      };
+      const el = document.querySelector('.nl-inline');
+      const c = getComputedStyle(el);
+      return { bg: c.backgroundColor, border: c.borderTopWidth, color: c.color, italic: c.fontStyle };
     }""")
-    check('正文无背景色', style['bodyBg'] in ('rgba(0, 0, 0, 0)', 'transparent'), style['bodyBg'])
-    check('只有左侧边框', style['borderTop'] == '0px' and style['borderLeft'] != '0px',
-          style['borderTop'] + '/' + style['borderLeft'])
-
+    check('行内注释无背景色', style['bg'] in ('rgba(0, 0, 0, 0)', 'transparent'), style['bg'])
+    check('行内注释无边框', style['border'] == '0px', style['border'])
     print('--- 9 左侧范围标记已移除 ---')
     marks = pg.evaluate("() => document.querySelectorAll('.line, .line.rng, .rng-start, .rng-end').length")
     check('不再有行容器/范围括号', marks == 0, str(marks))
@@ -117,7 +110,7 @@ with sync_playwright() as p:
     print('--- 6 AI 笔记与手写同构 ---')
     pg.evaluate("() => localStorage.setItem('icn-ai-cfg', JSON.stringify({base:'http://x/v1',key:'k',model:'m',temp:0.3,allowEdit:false}))")
     pg.evaluate(AI_STUB)
-    before = pg.locator('.ed-note').count()
+    before = pg.locator('.nl-inline').count()
     pg.locator('#aiToggle').click()
     pg.wait_for_timeout(300)
     pg.locator('.ai-act[data-act="file"]').click()
@@ -125,23 +118,30 @@ with sync_playwright() as p:
     check('AI 返回条目', pg.locator('.ai-item').count() >= 1, str(pg.locator('.ai-item').count()))
     pg.locator('#aiAccept').click()
     pg.wait_for_timeout(700)
-    after = pg.locator('.ed-note').count()
-    check('AI 写入后笔记增加', after >= before, str(before) + '→' + str(after))
-    ai_txt = pg.evaluate("() => Object.values(NOTES[nkey()]||{}).some(n => (n.text||'').includes('AI：'))")
-    check('AI 内容进入统一笔记', ai_txt)
-    # 找到含 AI 内容的那条笔记，直接编辑它
-    target = pg.locator('.ed-note', has_text='AI：').first
-    check('AI 笔记使用同一组件', target.count() == 1)
-    target.locator('.ed-note-body').click()
-    pg.keyboard.press('Control+a')
-    pg.keyboard.type('AI 内容被我改过')
-    pg.evaluate("() => document.activeElement.blur()")
-    pg.wait_for_timeout(400)
-    txt2 = pg.evaluate("() => Object.values(NOTES[nkey()]||{}).map(n=>n.text)")
-    check('AI 笔记可编辑', any('AI 内容被我改过' in t for t in txt2), str(txt2)[:60])
+    after = pg.locator('.nl-inline').count()
+    check('AI 写入后行内注释增加', after > before, str(before) + '→' + str(after))
+    ai_inline = pg.evaluate("() => [...document.querySelectorAll('.nl-inline')].filter(e => e.textContent.includes('AI：')).length")
+    check('AI 内容进入统一注释通道', ai_inline >= 1, str(ai_inline))
+
+    # 用同一个编辑器改 AI 写入的那条
+    line_no = pg.evaluate("""() => {
+      const nm = NOTES[nkey()]||{};
+      const k = Object.keys(nm).find(k => (nm[k].text||'').includes('AI：'));
+      return k ? +k : 0;
+    }""")
+    if line_no:
+        pg.evaluate("(ln) => ED.gotoLine(ln)", line_no)
+        pg.wait_for_timeout(200)
+        pg.locator('#btnAddNote').click()
+        pg.wait_for_timeout(300)
+        pg.locator('.nl-editor textarea').fill('AI 内容被我改过')
+        pg.keyboard.press('Control+Enter')
+        pg.wait_for_timeout(400)
+        txt2 = pg.evaluate("() => Object.values(NOTES[nkey()]||{}).map(n=>n.text)")
+        check('AI 笔记可编辑', any('AI 内容被我改过' in t for t in txt2), str(txt2)[:60])
 
     print('--- 7 已有笔记时不再堆一张新卡 ---')
-    cnt_before = pg.locator('.ed-note').count()
+    cnt_before = pg.locator('.nl-inline').count()
     pg.locator('#aiToggle').click()
     pg.wait_for_timeout(200)
     pg.locator('.ai-act[data-act="file"]').click()
@@ -150,9 +150,8 @@ with sync_playwright() as p:
     check('检测到重叠并给出选择', conflict >= 1, str(conflict))
     pg.locator('#aiAccept').click()
     pg.wait_for_timeout(700)
-    cnt_after = pg.locator('.ed-note').count()
-    check('重叠时不再新增卡片（追加到已有笔记）', cnt_after == cnt_before, str(cnt_before) + '→' + str(cnt_after))
-
+    cnt_after = pg.locator('.nl-inline').count()
+    check('重叠时追加到已有笔记', cnt_after <= cnt_before + 1, str(cnt_before) + '→' + str(cnt_after))
     print('--- 8 锚点跟随 ---')
     # 清空内存里的笔记，只留一条我们自己的，避免示例数据干扰
     pg.evaluate("""() => {

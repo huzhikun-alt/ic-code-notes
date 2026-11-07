@@ -245,9 +245,9 @@ const byLevel = (lines, lv) => lines.filter(l => l.level === lv);
 const spanText = l => (l ? l.from + '-' + l.to : 'none');
 
 /* ============================================================
-   1. 三层嵌套：每级一条线、间距 = 单位 × 字宽
+   1. 单列范围线：箭头右侧、所有代码行行首左侧
    ============================================================ */
-console.log('--- 1/3 三层嵌套：每级一条线且等距 ---');
+console.log('--- 1 单列位置 ---');
 const NESTED = [
   'sub outer {',
   '    my $x = 1;',
@@ -260,41 +260,30 @@ const NESTED = [
 ];
 let svg = boot(NESTED, 'perl');
 let lines = parseLines(svg);
-let levels = [...new Set(lines.map(l => l.level))].sort();
-check('data-level 覆盖 1/2/3', levels.join(',') === '1,2,3', levels.join(','));
-check('第 1 级区间 = 第 2~7 行', spanText(byLevel(lines, 1)[0]) === '2-7', spanText(byLevel(lines, 1)[0]));
-check('第 2 级区间 = 第 4~6 行', spanText(byLevel(lines, 2)[0]) === '4-6', spanText(byLevel(lines, 2)[0]));
-check('第 3 级区间 = 第 5 行', spanText(byLevel(lines, 3)[0]) === '5-5', spanText(byLevel(lines, 3)[0]));
-const xs = [1, 2, 3].map(lv => byLevel(lines, lv)[0].x);
-check('线在缩进边界列：x = 24.5/56.5/88.5',
-  near(xs[0], 24.5) && near(xs[1], 56.5) && near(xs[2], 88.5), xs.join(','));
-check('相邻两级间距 = 32px',
-  near(xs[1] - xs[0], 32) && near(xs[2] - xs[1], 32), (xs[1] - xs[0]) + ',' + (xs[2] - xs[1]));
+let base = lines.filter(l => !l.active);
+let act = lines.filter(l => l.active);
+check('只有一条 gutter 列', new Set(lines.map(l => l.x)).size === 1, lines.map(l => l.x).join(','));
+check('列在正文左边界左侧（不进入代码缩进）', lines[0].x < 24, String(lines[0].x));
+check('列在折叠箭头右侧', lines[0].x > parseFolds(svg)[0].x3, lines[0].x + ' > ' + parseFolds(svg)[0].x3);
+check('底纹覆盖 top-level 块 2~7 行', base.length === 1 && base[0].level === 1 &&
+  base[0].from === 2 && base[0].to === 7, JSON.stringify(base));
+check('活动块范围叠在同一列', act.length === 1 && act[0].level === 1 &&
+  act[0].from === 2 && act[0].to === 7 && act[0].x === base[0].x, JSON.stringify(act));
 check('线从第 2 行顶到第 7 行底（y=38..170）',
-  near(byLevel(lines, 1)[0].y1, 38) && near(byLevel(lines, 1)[0].y2, 170),
-  byLevel(lines, 1)[0].y1 + '..' + byLevel(lines, 1)[0].y2);
-check('块结束即断线（第 1 级只到 } 前一行）', byLevel(lines, 1)[0].to === 7);
+  near(base[0].y1, 38) && near(base[0].y2, 170), base[0].y1 + '..' + base[0].y2);
+check('块结束即断线（第 1 级只到 } 前一行）', base[0].to === 7);
 check('折叠箭头只出现在块起始行 1/3/4',
   parseFolds(svg).map(f => f.line).join(',') === '1,3,4', parseFolds(svg).map(f => f.line).join(','));
 check('三个箭头都固定在 x=11.5', parseFolds(svg).every(f => near(f.cx, 11.5, 0.01)));
 check('箭头尺寸 8.4×3.8', near(parseFolds(svg)[0].x3 - parseFolds(svg)[0].x1, 8.4, 0.05) &&
   near(parseFolds(svg)[0].y3 - parseFolds(svg)[0].y1, 0, 0.05));
 
-/* 活动块：光标在第 1 行，第一级高亮 */
-check('光标所在块的第 1 级高亮', byLevel(lines, 1).some(l => l.active), '');
-
-/* 纯收尾行不当作块头：Verilog 的 ); / } 不应有折叠箭头 */
-svg = boot(['module m (', '    input a', ');', '  function f (', '      input b', '  );', '    logic c;', '  endfunction', 'endmodule'], 'verilog');
-const vf = parseFolds(svg).map(f => f.line);
-check('); 这类收尾行没有折叠箭头', vf.join(',') === '1,4', vf.join(','));
-
-/* 高亮层是 token span 时，Range 实测仍要对齐 */
+/* 高亮层是 token span 时也不影响列位置 */
 svg = boot(NESTED, 'perl', { spans: true });
 const spanLines = parseLines(svg);
-check('token span 渲染下线仍在缩进边界列',
-  near(byLevel(spanLines, 1)[0].x, 24.5) && near(byLevel(spanLines, 2)[0].x, 56.5) &&
-  near(byLevel(spanLines, 3)[0].x, 88.5),
-  [1, 2, 3].map(lv => byLevel(spanLines, lv)[0].x).join(','));
+check('token span 渲染下仍是同一 gutter 列',
+  new Set(spanLines.map(l => l.x)).size === 1 && spanLines[0].x === 20.5,
+  spanLines.map(l => l.x).join(','));
 
 /* ============================================================
    折叠范围 / 显示副本（纯逻辑）
@@ -315,13 +304,12 @@ check('Python 按缩进折叠', JSON.stringify(core.foldRangeOf(['def f():', '  
   JSON.stringify({ start: 0, end: 1 }));
 const disp = core.buildDisplay(perlFold, [{ start: 0, end: 3 }], 4, [0, 1, 1, 0]);
 check('显示副本用占位行代替隐藏行', disp.lines.length === 2 && disp.map[1].ph &&
-  disp.lines[1].startsWith('    …') && disp.map[1].count === 3,
-  JSON.stringify(disp));
+  disp.lines[1].startsWith('    …') && disp.map[1].count === 3, JSON.stringify(disp));
 
 /* ============================================================
-   2. 空行不打断；块结束后断线
+   2. 空行不打断；块结束后断线；同列重启
    ============================================================ */
-console.log('--- 2/4 空行不打断 / 块结束断线 ---');
+console.log('--- 2 空行 / 多块 ---');
 const BLANK = [
   'sub outer {',
   '    my $x = 1;',
@@ -337,40 +325,43 @@ const BLANK = [
 ];
 svg = boot(BLANK, 'perl');
 lines = parseLines(svg);
-check('空行不打断第 1 级：2-6 行连续', spanText(byLevel(lines, 1)[0]) === '2-6', spanText(byLevel(lines, 1)[0]));
-check('第 2 级只覆盖 if 内 5 行', spanText(byLevel(lines, 2)[0]) === '5-5', spanText(byLevel(lines, 2)[0]));
-check('第二个 sub 的线从第 10 行重新开始', byLevel(lines, 1).some(l => l.from === 10 && l.to === 10),
-  byLevel(lines, 1).map(l => l.from + '-' + l.to).join(' | '));
+base = lines.filter(l => !l.active);
+check('空行不打断：2~6 行连续', base[0].from === 2 && base[0].to === 6,
+  base.map(l => l.from + '-' + l.to).join(' | '));
+check('第二个 sub 的线从第 10 行重新开始', base.some(l => l.from === 10 && l.to === 10),
+  base.map(l => l.from + '-' + l.to).join(' | '));
 check('空行不产生箭头', !parseFolds(svg).some(f => f.line === 8));
+check('多块也共用同一 gutter 列', new Set(lines.map(l => l.x)).size === 1, lines.map(l => l.x).join(','));
 
 /* ============================================================
-   3. 切换语言 / 缩进单位
+   3. 缩进单位 / Tab
    ============================================================ */
-console.log('--- 3/6 缩进单位：Perl 4 / Verilog 2 / Tab 4 ---');
-check('Perl 探测到 4 空格', sandbox.window.__ED_GUIDES__.detectUnit(NESTED, 'perl', 4) === 4);
+console.log('--- 3 缩进单位 / Tab ---');
+check('Perl 探测到 4 空格', core.detectUnit(NESTED, 'perl', 4) === 4);
 check('单行临时多缩进一级不会改变单位',
-  sandbox.window.__ED_GUIDES__.detectUnit(['sub a {', '    x;', '        y;', '    z;', '}'], 'perl', 4) === 4);
-check('全平文件按语言兜底', sandbox.window.__ED_GUIDES__.detectUnit(['a', 'b'], 'verilog', 4) === 2);
+  core.detectUnit(['sub a {', '    x;', '        y;', '    z;', '}'], 'perl', 4) === 4);
+check('全平文件按语言兜底', core.detectUnit(['a', 'b'], 'verilog', 4) === 2);
 check('Verilog 探测到 2 空格',
-  sandbox.window.__ED_GUIDES__.detectUnit(['module m;', '  logic a;', '  always begin', '    a = 1;', '  end', 'endmodule'], 'verilog', 4) === 2);
+  core.detectUnit(['module m;', '  logic a;', '  always begin', '    a = 1;', '  end', 'endmodule'], 'verilog', 4) === 2);
 const TABS = ['sub x {', '\tmy $a = 1;', '\tif ($a) {', '\t\treturn;', '\t}', '}'];
-const tabLevels = sandbox.window.__ED_GUIDES__.levelsOf(TABS, 4, 4);
+const tabLevels = core.levelsOf(TABS, 4, 4);
 check('Tab 按 4 列展开', tabLevels[1] === 1 && tabLevels[3] === 2, tabLevels.join(','));
 svg = boot(TABS, 'perl');
 lines = parseLines(svg);
-check('Tab 文件同样生成两级线', [...new Set(lines.map(l => l.level))].join(',') === '1,2',
-  [...new Set(lines.map(l => l.level))].join(','));
+base = lines.filter(l => !l.active);
+check('Tab 文件同样生成一条 gutter 线', base.length === 1 && base[0].from === 2 && base[0].to === 5,
+  JSON.stringify(base));
 
 /* ============================================================
-   4. 滚动：竖线 x 不变，y 内容坐标不变；箭头固定屏幕列
+   4. 滚动：竖线 x 不变，y 由 transform 平移；箭头固定列
    ============================================================ */
-console.log('--- 5 滚动对齐 ---');
+console.log('--- 4 滚动对齐 ---');
 svg = boot(NESTED, 'perl', { sx: 0, sy: 0 });
-const before = parseLines(svg).find(l => l.level === 2);
+const before = parseLines(svg).find(l => !l.active);
 const beforeFold = parseFolds(svg)[0];
 const svgEl = mainEl.childNodes.find(n => n.tagName === 'svg');
 svg = boot(NESTED, 'perl', { sx: 16, sy: 44 });
-const after = parseLines(svg).find(l => l.level === 2);
+const after = parseLines(svg).find(l => !l.active);
 const afterFold = parseFolds(svg)[0];
 check('横向滚动后竖线 x 不变', near(before.x, after.x, 0.01), before.x + ' → ' + after.x);
 check('纵向滚动后 y 不变（由 transform 平移）', near(before.y1, after.y1, 0.01));
@@ -380,30 +371,37 @@ check('箭头横向跟回固定屏幕列', near(afterFold.cx - 16, beforeFold.cx
   afterFold.cx + ' - 16 = ' + (afterFold.cx - 16) + ' vs ' + beforeFold.cx);
 
 /* ============================================================
-   5. 光标块高亮
+   5. 活动块高亮：始终落在同一条 gutter 列
    ============================================================ */
-console.log('--- 活动块高亮跟随光标 ---');
+console.log('--- 5 活动块高亮 ---');
 svg = boot(NESTED, 'perl');
 taEl.selectionStart = taEl.selectionEnd = taEl.value.split('\n').slice(0, 2).join('\n').length + 1; // 第 3 行 if
-sandbox.window.__ED_GUIDES__.draw();
+core.draw();
 lines = parseLines(readSvg());
-const act = lines.filter(l => l.active);
-check('光标在 if 行时第 2 级高亮', act.length === 1 && act[0].level === 2 && act[0].from === 4 && act[0].to === 6, act.map(l => l.level + ':' + l.from + '-' + l.to).join());
-taEl.selectionStart = taEl.selectionEnd = taEl.value.split('\n').slice(0, 4).join('\n').length + 1; // 第 5 行，叶子
-sandbox.window.__ED_GUIDES__.draw();
-check('光标在叶子行时高亮所在块的范围线', (() => { const a = parseLines(readSvg()).filter(l => l.active);
-    return a.length === 1 && a[0].level === 3 && a[0].from === 5 && a[0].to === 5; })());
+base = lines.filter(l => !l.active);
+act = lines.filter(l => l.active);
+check('光标在 if 行时高亮 if 块的范围', act.length === 1 && act[0].level === 2 &&
+  act[0].from === 4 && act[0].to === 6 && act[0].x === base[0].x,
+  JSON.stringify(act));
+taEl.selectionStart = taEl.selectionEnd = taEl.value.split('\n').slice(0, 4).join('\n').length + 1; // 第 5 行叶子
+core.draw();
+lines = parseLines(readSvg());
+base = lines.filter(l => !l.active);
+act = lines.filter(l => l.active);
+check('叶子行高亮所在块的范围，仍在同一列', act.length === 1 && act[0].level === 3 &&
+  act[0].from === 5 && act[0].to === 5 && act[0].x === base[0].x, JSON.stringify(act));
 
 /* ============================================================
-   6. 边界：空文件、空行、单行
+   6. 边界
    ============================================================ */
-console.log('--- 边界 ---');
+console.log('--- 6 边界 ---');
 svg = boot([''], 'perl');
 check('空文件不崩、无线段', parseLines(svg).length === 0 && parseFolds(svg).length === 0);
 svg = boot(['', '', ''], 'perl');
 check('全空文件无线段', parseLines(svg).length === 0);
 svg = boot(['sub a {', '    x;', '}'], 'verilog');
-check('单块文件：1 条线 + 1 个箭头', parseLines(svg).length === 1 && parseFolds(svg).length === 1);
+check('单块文件：底纹 + 活动段 + 1 个箭头',
+  parseLines(svg).length === 2 && parseFolds(svg).length === 1, JSON.stringify(parseLines(svg)));
 svg = boot(['sub a {', '        x;', '}'], 'perl');
 check('缩进不是单位整数倍也能画线', parseLines(svg).length >= 1);
 

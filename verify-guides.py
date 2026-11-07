@@ -175,47 +175,27 @@ with sync_playwright() as p:
         return (hit[0]['from'], hit[0]['to']) if hit else (None, None)
 
     # ================================================================
-    print('--- 1/6 三层嵌套：每级一条线，Perl / Verilog / Python ---')
+    print('--- 1/6 单列范围线：折叠箭头右侧、所有代码行行首左侧 ---')
     inject(NESTED)
     rows = guides()
-    levels = sorted(set(r['level'] for r in rows))
-    check('data-level 覆盖 1/2/3', levels == [1, 2, 3], str(levels))
+    base = [r for r in rows if not r['active']]
+    act = [r for r in rows if r['active']]
     m = metric()
     u = unit()
     check('缩进单位探测为 4', u == 4, str(u))
-    check('第 1 级区间 = 2~7 行', span(rows, 1) == (2, 7), str(span(rows, 1)))
-    check('第 2 级区间 = 4~6 行', span(rows, 2) == (4, 6), str(span(rows, 2)))
-    check('第 3 级区间 = 5 行', span(rows, 3) == (5, 5), str(span(rows, 3)))
-
-    # 位置：x = 正文左边界 + (级-1) × 单位 × 字宽
-    print('--- 2/3 线与文字缩进列对齐，相邻级等距 ---')
-    want = lambda lv: m['textLeft'] + (lv - 1) * u * m['charW']
-    for lv in (1, 2, 3):
-        xs = by_level(rows, lv)[0]['x']
-        check('第 %d 级 x 对齐缩进列' % lv, abs(xs - want(lv)) <= 1.0,
-              'x=%.1f want=%.1f' % (xs, want(lv)))
-    gap12 = by_level(rows, 2)[0]['x'] - by_level(rows, 1)[0]['x']
-    gap23 = by_level(rows, 3)[0]['x'] - by_level(rows, 2)[0]['x']
-    ideal = u * m['charW']
-    check('相邻两级间距 = 单位 × 字宽', abs(gap12 - ideal) <= 1 and abs(gap23 - ideal) <= 1,
-          '%.1f / %.1f，理想 %.1f' % (gap12, gap23, ideal))
-    check('三级线都落在缩进边界列（不进入正文缩进）',
-          all(abs(by_level(rows, lv)[0]['x'] - want(lv)) <= 1 for lv in (1, 2, 3)),
-          str([by_level(rows, lv)[0]['x'] for lv in (1, 2, 3)]))
+    xs = sorted(set(r['x'] for r in rows))
+    check('只有一条 gutter 列', len(xs) == 1, str(xs))
+    check('列在正文左边界左侧（不进入代码缩进）', xs[0] < m['textLeft'],
+          'x=%.1f < textLeft=%.1f' % (xs[0], m['textLeft']))
     arrow_right = pg.evaluate("() => document.querySelector('.ed-guides path.fold').getBoundingClientRect().right")
-    g1_vx = by_level(rows, 1)[0]['vx']
-    body1_x = m['textLeft'] + 4 * m['charW']
-    check('第一条线在折叠箭头右侧', arrow_right < g1_vx,
-          'arrow.right=%.1f < line.x=%.1f' % (arrow_right, g1_vx))
-    check('第一条线在正文缩进之前', by_level(rows, 1)[0]['x'] < body1_x,
-          'line.x=%.1f < body=%.1f' % (by_level(rows, 1)[0]['x'], body1_x))
+    check('列在折叠箭头右侧', base[0]['vx'] > arrow_right,
+          'arrow.right=%.1f < line.x=%.1f' % (arrow_right, base[0]['vx']))
+    check('底纹覆盖 while 块 2~7 行', len(base) == 1 and base[0]['from'] == 2 and base[0]['to'] == 7,
+          str([(r['from'], r['to']) for r in base]))
+    check('活动段与底纹同列', not act or act[0]['x'] == base[0]['x'], str([r['x'] for r in act]))
+    gap_text = m['textLeft'] - xs[0]
+    check('线与正文之间留 2~6px', 2 <= gap_text <= 6, '%.1f' % gap_text)
 
-    pg.evaluate("""() => {
-        const t = document.getElementById('edInput');
-        t.setSelectionRange(t.value.length, t.value.length);
-        t.dispatchEvent(new Event('keyup'));
-    }""")
-    pg.wait_for_timeout(150)
     light = pg.evaluate("""() => {
         const l = document.querySelector('.ed-guides line:not(.active)') || document.querySelector('.ed-guides line');
         return {
@@ -233,8 +213,8 @@ with sync_playwright() as p:
         print('  SKIP 浅色颜色解析（浏览器返回 %s）' % light['stroke'])
 
     print('--- 4 块结束断线 ---')
-    check('第 1 级不画到最后的 }', by_level(rows, 1)[0]['to'] == 7)
-    check('第 3 级没有越出 while 块', by_level(rows, 3)[0]['to'] == 5)
+    check('底纹不画到最后的 }', base[0]['to'] == 7)
+    check('块结束后同一列重新开始', all(r['x'] == base[0]['x'] for r in base))
 
     print('--- 折叠箭头 ---')
     fold_lines = sorted(f['line'] for f in folds())
@@ -292,25 +272,19 @@ with sync_playwright() as p:
 
     # ================================================================
     print('--- 6 切换语言仍然正确 ---')
-    for name, lang, min_level in [('uart_rx.pl', 'perl', 1),
-                                  ('sat_alu.sv', 'verilog', 2),
-                                  ('analysis.py', 'python', 2)]:
+    for name in ('uart_rx.pl', 'sat_alu.sv', 'analysis.py'):
         open_sample(name)
         rows = guides()
         m = metric()
-        u = unit()
-        lv = sorted(set(r['level'] for r in rows))
-        check('%s：有参考线' % name, len(rows) >= 1, 'levels=' + str(lv))
-        check('%s：层级达到 %d' % (name, min_level), max(lv or [0]) >= min_level, 'levels=' + str(lv))
-        if len(lv) >= 2:
-            xs0 = by_level(rows, lv[0])[0]['x']
-            xs1 = by_level(rows, lv[1])[0]['x']
-            check('%s：级间距 = 单位 × 字宽' % name, abs((xs1 - xs0) - u * m['charW']) <= 1,
-                  '%.1f vs %.1f' % (xs1 - xs0, u * m['charW']))
-        check('%s：无重复重叠线段' % name,
-              len(set((r['level'], r['from'], r['to']) for r in rows)) == len(rows))
+        base = [r for r in rows if not r['active']]
+        xs = sorted(set(r['x'] for r in rows))
+        check('%s：有单列范围线' % name, len(base) >= 1 and len(xs) == 1,
+              'lines=%d xs=%s' % (len(base), xs))
+        check('%s：线在正文左侧' % name, bool(base) and all(r['x'] < m['textLeft'] for r in base),
+              'x=%.1f textLeft=%.1f' % (base[0]['x'], m['textLeft']) if base else 'none')
+        check('%s：底纹不重复' % name,
+              len(set((r['from'], r['to']) for r in base)) == len(base))
 
-    # ================================================================
     print('--- 7 不遮挡选择 ---')
     inject(NESTED)
     box = pg.locator('#edInput').bounding_box()
@@ -333,11 +307,14 @@ with sync_playwright() as p:
         t.dispatchEvent(new Event('keyup'));
     }""")
     pg.wait_for_timeout(200)
-    act = [r for r in guides() if r['active']]
-    check('光标在块首行时对应级高亮', len(act) == 1 and act[0]['level'] == 1,
-          str([(r['level'], r['from'], r['to']) for r in act]))
+    all_rows = guides()
+    act = [r for r in all_rows if r['active']]
+    base = [r for r in all_rows if not r['active']]
+    check('光标在块首行时高亮该块范围', len(act) == 1 and act[0]['level'] == 1 and
+          (act[0]['from'], act[0]['to']) == (2, 7) and act[0]['x'] == base[0]['x'],
+          str([(r['level'], r['from'], r['to'], r['x']) for r in act]))
 
-    # 叶子行：范围线落在所在块的缩进左边界，不压进正文缩进
+    # 叶子行：高亮所在块的范围，仍在同一 gutter 列
     pg.evaluate("""() => {
         const t = document.getElementById('edInput');
         const v = t.value.split('\\n');
@@ -346,129 +323,14 @@ with sync_playwright() as p:
         t.dispatchEvent(new Event('keyup'));
     }""")
     pg.wait_for_timeout(250)
-    leaf_act = [r for r in guides() if r['active']]
-    check('叶子行高亮所在块的缩进左边界',
+    all_rows = guides()
+    leaf_act = [r for r in all_rows if r['active']]
+    leaf_base = [r for r in all_rows if not r['active']]
+    check('叶子行高亮所在块范围、同列且不进入缩进',
           len(leaf_act) == 1 and leaf_act[0]['level'] == 3 and
-          abs(leaf_act[0]['x'] - want(3)) <= 1 and
-          leaf_act[0]['x'] < m['textLeft'] + 12 * m['charW'],
+          (leaf_act[0]['from'], leaf_act[0]['to']) == (5, 5) and
+          leaf_act[0]['x'] == leaf_base[0]['x'] and leaf_act[0]['x'] < m['textLeft'],
           str([(r['level'], r['from'], r['to'], r['x']) for r in leaf_act]))
-
-    # ================================================================
-    print('--- 折叠 / 展开 ---')
-    pg.evaluate("() => { cur='check_log.pl'; ED.render(); window.__ED_FOLDS__.expandAll(); }")
-    pg.wait_for_timeout(300)
-    pg.evaluate("() => window.__ED_FOLDS__.toggleFold(5)")   # while (my $l = <STDIN>) {
-    pg.wait_for_timeout(400)
-    fs = pg.evaluate("""() => {
-        const t = document.getElementById('edInput');
-        const v = ED.getFoldView();
-        return {
-            ro: t.readOnly,
-            n: t.value.split('\\n').length,
-            model: files()[cur].lines.length,
-            ph: v ? v.map.filter(e => e.ph).map(e => ({start:e.start, to:e.to, count:e.count})) : [],
-            gutter: document.getElementById('edGutter').textContent.includes('⋮'),
-            collapsed: document.querySelectorAll('.ed-guides path.fold.collapsed').length
-        };
-    }""")
-    check('折叠后 textarea 只读', fs['ro'])
-    check('折叠后显示行数减少', fs['n'] == 7 and fs['model'] == 12, '%s / %s' % (fs['n'], fs['model']))
-    check('占位行记录隐藏范围', fs['ph'] == [{'start': 5, 'to': 11, 'count': 6}], str(fs['ph']))
-    check('gutter 用 ⋮ 表示折叠行', fs['gutter'])
-    check('箭头变为向右（collapsed）', fs['collapsed'] >= 1, str(fs['collapsed']))
-
-    r = pg.evaluate("() => document.querySelector('.ed-guides path.fold').getBoundingClientRect().toJSON()")
-    pg.mouse.click(r['x'] + r['width'] / 2, r['y'] + r['height'] / 2)
-    pg.wait_for_timeout(400)
-    check('点击箭头展开', pg.evaluate("() => !ED.isFolded() && !document.getElementById('edInput').readOnly"))
-
-    # 点击占位行展开
-    pg.evaluate("() => window.__ED_FOLDS__.toggleFold(5)")
-    pg.wait_for_timeout(300)
-    phy = pg.evaluate("""() => {
-        const v = ED.getFoldView(); const i = v.map.findIndex(e => e.ph);
-        const m = document.querySelector('.ed-main').getBoundingClientRect();
-        const t = document.getElementById('edInput');
-        return {x: m.left + 120, y: m.top + (16 + i * 22 - t.scrollTop) + 11};
-    }""")
-    pg.mouse.click(phy['x'], phy['y'])
-    pg.wait_for_timeout(400)
-    check('点击占位行展开', pg.evaluate("() => !ED.isFolded()"))
-
-    # 折叠时输入 → 自动展开并写回模型
-    pg.evaluate('() => localStorage.clear()')
-    pg.reload()
-    pg.wait_for_timeout(1200)
-    pg.evaluate("() => { cur='check_log.pl'; ED.render(); window.__ED_FOLDS__.toggleFold(5); }")
-    pg.wait_for_timeout(300)
-    pg.evaluate("""() => {
-        const t = document.getElementById('edInput');
-        const v = t.value.split('\\n');
-        let pos = 0; for (let i = 0; i < 1; i++) pos += v[i].length + 1;
-        t.focus();
-        t.setSelectionRange(pos + v[1].length, pos + v[1].length);
-        t.dispatchEvent(new Event('keyup'));
-    }""")
-    pg.keyboard.type('X')
-    pg.wait_for_timeout(500)
-    typed = pg.evaluate("() => ({folded: ED.isFolded(), line: files()[cur].lines[1]})")
-    check('折叠时输入自动展开', not typed['folded'])
-    check('输入落到正确的模型行', typed['line'].endswith('X'), repr(typed['line']))
-
-    # 折叠时回车 → 自动展开并保留自动缩进
-    pg.evaluate('() => localStorage.clear()')
-    pg.reload()
-    pg.wait_for_timeout(1200)
-    pg.evaluate("() => { cur='check_log.pl'; ED.render(); window.__ED_FOLDS__.toggleFold(5); }")
-    pg.wait_for_timeout(300)
-    pg.evaluate("""() => {
-        const t = document.getElementById('edInput');
-        const v = t.value.split('\\n');
-        let pos = 0; for (let i = 0; i < 1; i++) pos += v[i].length + 1;
-        t.focus();
-        t.setSelectionRange(pos + v[1].length, pos + v[1].length);
-        t.dispatchEvent(new Event('keyup'));
-    }""")
-    pg.keyboard.press('Enter')
-    pg.wait_for_timeout(500)
-    ent = pg.evaluate("() => ({folded: ED.isFolded(), n: files()[cur].lines.length})")
-    check('折叠时回车自动展开并插入一行', not ent['folded'] and ent['n'] == 13, str(ent))
-
-    # 折叠时复制不展开
-    pg.evaluate('() => localStorage.clear()')
-    pg.reload()
-    pg.wait_for_timeout(1200)
-    pg.evaluate("() => { cur='check_log.pl'; ED.render(); window.__ED_FOLDS__.toggleFold(5); }")
-    pg.wait_for_timeout(300)
-    pg.evaluate("""() => {
-        const t = document.getElementById('edInput');
-        const v = t.value.split('\\n');
-        t.focus();
-        t.setSelectionRange(0, v[0].length + v[1].length + 1);
-    }""")
-    pg.keyboard.press('Control+c')
-    pg.wait_for_timeout(300)
-    check('折叠时复制不会展开', pg.evaluate("() => ED.isFolded()"))
-
-    # Verilog / Python 折叠范围
-    pg.evaluate("() => { cur='sat_alu.sv'; ED.render(); window.__ED_FOLDS__.expandAll(); }")
-    pg.wait_for_timeout(300)
-    pg.evaluate("() => window.__ED_FOLDS__.toggleFold(2)")   # module
-    pg.wait_for_timeout(350)
-    sat = pg.evaluate("() => { const v=ED.getFoldView(); return v ? v.map.filter(e=>e.ph).map(e=>({start:e.start,to:e.to,count:e.count})) : []; }")
-    check('Verilog module 折叠到 endmodule', sat == [{'start': 2, 'to': 19, 'count': 17}], str(sat))
-    pg.evaluate("() => { window.__ED_FOLDS__.expandAll(); window.__ED_FOLDS__.toggleFold(8); }")  # function
-    pg.wait_for_timeout(350)
-    sat = pg.evaluate("() => { const v=ED.getFoldView(); return v ? v.map.filter(e=>e.ph).map(e=>({start:e.start,to:e.to,count:e.count})) : []; }")
-    check('Verilog function 折叠到 endfunction', sat == [{'start': 8, 'to': 15, 'count': 7}], str(sat))
-    pg.evaluate("() => { window.__ED_FOLDS__.expandAll(); cur='analysis.py'; ED.render(); }")
-    pg.wait_for_timeout(300)
-    pg.evaluate("() => window.__ED_FOLDS__.toggleFold(5)")   # def load
-    pg.wait_for_timeout(350)
-    py = pg.evaluate("() => { const v=ED.getFoldView(); return v ? v.map.filter(e=>e.ph).map(e=>({start:e.start,to:e.to,count:e.count})) : []; }")
-    check('Python def 按缩进折叠', py == [{'start': 5, 'to': 8, 'count': 3}], str(py))
-    pg.evaluate("() => window.__ED_FOLDS__.expandAll()")
-    pg.wait_for_timeout(300)
 
     # ================================================================
     print('--- 8 配色 / 无 JS 报错 ---')

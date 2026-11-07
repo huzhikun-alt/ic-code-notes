@@ -1,10 +1,10 @@
 /* ============================================================
    范围参考线 + 折叠箭头
-   - 竖线画在缩进边界列（列 0、4、8…），位于折叠箭头右侧
-   - 不进入代码正文的缩进：第 k 级线在列 (k-1)*unit
-   - 线按连续区间贯通，块结束即断；空行不打断
+   - 只保留一条 gutter 列竖线：在折叠箭头右侧、所有代码行行首左侧
+   - 竖线不进入任何代码缩进（固定 x = 正文左边界 - 3.5px）
+   - 按连续区间贯通，块结束即断；空行不打断
    - 折叠箭头固定在行号与代码之间的窄条里，可点击折叠/展开
-   - 光标所在块的范围线高亮在块的缩进左边界；折叠时用占位行代替隐藏行
+   - 光标所在块的范围在这条 gutter 线上高亮；折叠时用占位行代替隐藏行
    ============================================================ */
 (() => {
   'use strict';
@@ -20,6 +20,8 @@
   const CHEV_RIGHT_H = 3.0;
   const CHEV_LIFT = 1.2;
   const CULL = 120;
+  /* 唯一一条范围线的 x：正文左边界再往左 3.5px（仍在折叠箭头右侧） */
+  const GUIDE_GAP = 4;
 
   let svg = null;
   let ta = null, hl = null, main = null;
@@ -142,9 +144,10 @@
     return out;
   }
 
-  /* 光标所表示的「范围线」：
-     - 光标在块起始行 → 高亮这个块的内容（第 depth+1 级，画在块缩进左边界）
-     - 光标在普通行/叶子 → 高亮它所在块（第 depth 级，画在块的缩进左边界） */
+  /* 光标所表示的「范围段」：
+     - 光标在块起始行 → 这个块的内容区间（第 depth+1 级）
+     - 光标在普通行/叶子 → 它所在块的内容区间（第 depth 级）
+     所有范围段都画在同一条 gutter 列上。 */
   function activeRangeOf(levels, caretLine) {
     let i = caretLine;
     if (i < 0 || i >= levels.length) return null;
@@ -804,7 +807,7 @@
 
     function pushLine(level, from, to, isActive) {
       if (to < from) return;
-      const x = snap(m.textLeft + (level - 1) * unit * m.charW);
+      const x = snap(m.textLeft - GUIDE_GAP);
       const y1 = m.padT + from * m.lh;
       const y2 = m.padT + (to + 1) * m.lh;
       if (y2 < vTop || y1 > vBot) return;
@@ -813,22 +816,12 @@
         '" data-from="' + (from + 1) + '" data-to="' + (to + 1) + '"/>');
     }
 
+    /* 底纹：所有缩进内容共用一条 gutter 线（按块断开） */
     for (let s = 0; s < segs.length; s++) {
-      const seg = segs[s];
-      if (!active || active.level !== seg.level) {
-        pushLine(seg.level, seg.from, seg.to, false);
-        continue;
-      }
-      const a = Math.max(seg.from, active.from);
-      const b = Math.min(seg.to, active.to);
-      if (a > b) {
-        pushLine(seg.level, seg.from, seg.to, false);
-      } else {
-        pushLine(seg.level, seg.from, a - 1, false);
-        pushLine(seg.level, a, b, true);
-        pushLine(seg.level, b + 1, seg.to, false);
-      }
+      if (segs[s].level === 1) pushLine(1, segs[s].from, segs[s].to, false);
     }
+    /* 当前块的范围段叠加在这条线上（更亮） */
+    if (active) pushLine(active.level, active.from, active.to, true);
 
     /* 折叠箭头固定在屏幕列：加回 scrollLeft 抵消 SVG 的横向平移 */
     for (let i = 0; i < folds.length; i++) {

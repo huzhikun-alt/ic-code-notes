@@ -189,7 +189,7 @@ with sync_playwright() as p:
 
     # 位置：x = 正文左边界 + (级-1) × 单位 × 字宽
     print('--- 2/3 线与文字缩进列对齐，相邻级等距 ---')
-    want = lambda lv: m['textLeft'] + lv * u * m['charW'] - 3
+    want = lambda lv: m['textLeft'] + (lv - 1) * u * m['charW']
     for lv in (1, 2, 3):
         xs = by_level(rows, lv)[0]['x']
         check('第 %d 级 x 对齐缩进列' % lv, abs(xs - want(lv)) <= 1.0,
@@ -199,10 +199,16 @@ with sync_playwright() as p:
     ideal = u * m['charW']
     check('相邻两级间距 = 单位 × 字宽', abs(gap12 - ideal) <= 1 and abs(gap23 - ideal) <= 1,
           '%.1f / %.1f，理想 %.1f' % (gap12, gap23, ideal))
-    gap1 = (m['textLeft'] + 4 * m['charW']) - by_level(rows, 1)[0]['x']
-    gap3 = (m['textLeft'] + 12 * m['charW']) - by_level(rows, 3)[0]['x']
-    check('范围线贴在缩进文字左侧 2~6px', 2 <= gap1 <= 6 and 2 <= gap3 <= 6,
-          'gap=%.1f / %.1f' % (gap1, gap3))
+    check('三级线都落在缩进边界列（不进入正文缩进）',
+          all(abs(by_level(rows, lv)[0]['x'] - want(lv)) <= 1 for lv in (1, 2, 3)),
+          str([by_level(rows, lv)[0]['x'] for lv in (1, 2, 3)]))
+    arrow_right = pg.evaluate("() => document.querySelector('.ed-guides path.fold').getBoundingClientRect().right")
+    g1_vx = by_level(rows, 1)[0]['vx']
+    body1_x = m['textLeft'] + 4 * m['charW']
+    check('第一条线在折叠箭头右侧', arrow_right < g1_vx,
+          'arrow.right=%.1f < line.x=%.1f' % (arrow_right, g1_vx))
+    check('第一条线在正文缩进之前', by_level(rows, 1)[0]['x'] < body1_x,
+          'line.x=%.1f < body=%.1f' % (by_level(rows, 1)[0]['x'], body1_x))
 
     pg.evaluate("""() => {
         const t = document.getElementById('edInput');
@@ -330,6 +336,22 @@ with sync_playwright() as p:
     act = [r for r in guides() if r['active']]
     check('光标在块首行时对应级高亮', len(act) == 1 and act[0]['level'] == 1,
           str([(r['level'], r['from'], r['to']) for r in act]))
+
+    # 叶子行：范围线落在所在块的缩进左边界，不压进正文缩进
+    pg.evaluate("""() => {
+        const t = document.getElementById('edInput');
+        const v = t.value.split('\\n');
+        let pos = 0; for (let i = 0; i < 4; i++) pos += v[i].length + 1;
+        t.focus(); t.setSelectionRange(pos, pos);
+        t.dispatchEvent(new Event('keyup'));
+    }""")
+    pg.wait_for_timeout(250)
+    leaf_act = [r for r in guides() if r['active']]
+    check('叶子行高亮所在块的缩进左边界',
+          len(leaf_act) == 1 and leaf_act[0]['level'] == 3 and
+          abs(leaf_act[0]['x'] - want(3)) <= 1 and
+          leaf_act[0]['x'] < m['textLeft'] + 12 * m['charW'],
+          str([(r['level'], r['from'], r['to'], r['x']) for r in leaf_act]))
 
     # ================================================================
     print('--- 折叠 / 展开 ---')

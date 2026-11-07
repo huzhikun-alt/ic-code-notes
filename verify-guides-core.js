@@ -266,8 +266,8 @@ check('第 1 级区间 = 第 2~7 行', spanText(byLevel(lines, 1)[0]) === '2-7',
 check('第 2 级区间 = 第 4~6 行', spanText(byLevel(lines, 2)[0]) === '4-6', spanText(byLevel(lines, 2)[0]));
 check('第 3 级区间 = 第 5 行', spanText(byLevel(lines, 3)[0]) === '5-5', spanText(byLevel(lines, 3)[0]));
 const xs = [1, 2, 3].map(lv => byLevel(lines, lv)[0].x);
-check('范围线贴到正文左侧：x = 53.5/85.5/117.5',
-  near(xs[0], 53.5) && near(xs[1], 85.5) && near(xs[2], 117.5), xs.join(','));
+check('线在缩进边界列：x = 24.5/56.5/88.5',
+  near(xs[0], 24.5) && near(xs[1], 56.5) && near(xs[2], 88.5), xs.join(','));
 check('相邻两级间距 = 32px',
   near(xs[1] - xs[0], 32) && near(xs[2] - xs[1], 32), (xs[1] - xs[0]) + ',' + (xs[2] - xs[1]));
 check('线从第 2 行顶到第 7 行底（y=38..170）',
@@ -291,9 +291,9 @@ check('); 这类收尾行没有折叠箭头', vf.join(',') === '1,4', vf.join(',
 /* 高亮层是 token span 时，Range 实测仍要对齐 */
 svg = boot(NESTED, 'perl', { spans: true });
 const spanLines = parseLines(svg);
-check('token span 渲染下范围线仍在正文左侧',
-  near(byLevel(spanLines, 1)[0].x, 53.5) && near(byLevel(spanLines, 2)[0].x, 85.5) &&
-  near(byLevel(spanLines, 3)[0].x, 117.5),
+check('token span 渲染下线仍在缩进边界列',
+  near(byLevel(spanLines, 1)[0].x, 24.5) && near(byLevel(spanLines, 2)[0].x, 56.5) &&
+  near(byLevel(spanLines, 3)[0].x, 88.5),
   [1, 2, 3].map(lv => byLevel(spanLines, lv)[0].x).join(','));
 
 /* ============================================================

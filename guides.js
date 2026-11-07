@@ -1,9 +1,10 @@
 /* ============================================================
    范围参考线 + 折叠箭头
-   - 每一级作用域一条竖线，画在「这一层代码的左边」（正文左侧 3px）
+   - 竖线画在缩进边界列（列 0、4、8…），位于折叠箭头右侧
+   - 不进入代码正文的缩进：第 k 级线在列 (k-1)*unit
    - 线按连续区间贯通，块结束即断；空行不打断
    - 折叠箭头固定在行号与代码之间的窄条里，可点击折叠/展开
-   - 光标所在块的范围线高亮；折叠时用占位行代替隐藏行
+   - 光标所在块的范围线高亮在块的缩进左边界；折叠时用占位行代替隐藏行
    ============================================================ */
 (() => {
   'use strict';
@@ -19,8 +20,6 @@
   const CHEV_RIGHT_H = 3.0;
   const CHEV_LIFT = 1.2;
   const CULL = 120;
-  /* 范围线贴在正文左边：线心比字符单元左边界再左 3px */
-  const GUIDE_GAP = 3;
 
   let svg = null;
   let ta = null, hl = null, main = null;
@@ -144,8 +143,8 @@
   }
 
   /* 光标所表示的「范围线」：
-     - 光标在块起始行 → 高亮这个块的内容（第 depth+1 级，画在正文左侧）
-     - 光标在普通行/叶子 → 高亮它所在块的内容（第 depth 级，画在正文左侧） */
+     - 光标在块起始行 → 高亮这个块的内容（第 depth+1 级，画在块缩进左边界）
+     - 光标在普通行/叶子 → 高亮它所在块（第 depth 级，画在块的缩进左边界） */
   function activeRangeOf(levels, caretLine) {
     let i = caretLine;
     if (i < 0 || i >= levels.length) return null;
@@ -805,7 +804,7 @@
 
     function pushLine(level, from, to, isActive) {
       if (to < from) return;
-      const x = snap(m.textLeft + level * unit * m.charW - GUIDE_GAP);
+      const x = snap(m.textLeft + (level - 1) * unit * m.charW);
       const y1 = m.padT + from * m.lh;
       const y2 = m.padT + (to + 1) * m.lh;
       if (y2 < vTop || y1 > vBot) return;

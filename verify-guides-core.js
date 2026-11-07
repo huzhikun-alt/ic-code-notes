@@ -231,11 +231,12 @@ function parseLines(html) {
 
 function parseFolds(html) {
   const out = [];
-  const re = /<path d="([^"]+)" class="fold" data-line="(\d+)"\/>/g;
+  const re = /<path d="([^"]+)" class="fold(?: collapsed)?" data-line="(\d+)"(?: data-model="(\d+)")?\/>/g;
   let m;
   while ((m = re.exec(html))) {
     const nums = m[1].match(/-?\d+(?:\.\d+)?/g).map(Number);
-    out.push({ line: +m[2], x1: nums[0], y1: nums[1], cx: nums[2], cy: nums[3], x3: nums[4], y3: nums[5] });
+    out.push({ line: +m[2], model: m[3] ? +m[3] : +m[2], collapsed: /collapsed/.test(m[0]),
+      x1: nums[0], y1: nums[1], cx: nums[2], cy: nums[3], x3: nums[4], y3: nums[5] });
   }
   return out;
 }
@@ -265,8 +266,8 @@ check('第 1 级区间 = 第 2~7 行', spanText(byLevel(lines, 1)[0]) === '2-7',
 check('第 2 级区间 = 第 4~6 行', spanText(byLevel(lines, 2)[0]) === '4-6', spanText(byLevel(lines, 2)[0]));
 check('第 3 级区间 = 第 5 行', spanText(byLevel(lines, 3)[0]) === '5-5', spanText(byLevel(lines, 3)[0]));
 const xs = [1, 2, 3].map(lv => byLevel(lines, lv)[0].x);
-check('x 依次为 24/56/88（单位 4 × 字宽 8）',
-  near(xs[0], 24.5) && near(xs[1], 56.5) && near(xs[2], 88.5), xs.join(','));
+check('范围线贴到正文左侧：x = 53.5/85.5/117.5',
+  near(xs[0], 53.5) && near(xs[1], 85.5) && near(xs[2], 117.5), xs.join(','));
 check('相邻两级间距 = 32px',
   near(xs[1] - xs[0], 32) && near(xs[2] - xs[1], 32), (xs[1] - xs[0]) + ',' + (xs[2] - xs[1]));
 check('线从第 2 行顶到第 7 行底（y=38..170）',
@@ -276,7 +277,7 @@ check('块结束即断线（第 1 级只到 } 前一行）', byLevel(lines, 1)[0
 check('折叠箭头只出现在块起始行 1/3/4',
   parseFolds(svg).map(f => f.line).join(',') === '1,3,4', parseFolds(svg).map(f => f.line).join(','));
 check('三个箭头都固定在 x=11.5', parseFolds(svg).every(f => near(f.cx, 11.5, 0.01)));
-check('箭头尺寸 10.8×4.8', near(parseFolds(svg)[0].x3 - parseFolds(svg)[0].x1, 10.8, 0.05) &&
+check('箭头尺寸 8.4×3.8', near(parseFolds(svg)[0].x3 - parseFolds(svg)[0].x1, 8.4, 0.05) &&
   near(parseFolds(svg)[0].y3 - parseFolds(svg)[0].y1, 0, 0.05));
 
 /* 活动块：光标在第 1 行，第一级高亮 */
@@ -290,10 +291,32 @@ check('); 这类收尾行没有折叠箭头', vf.join(',') === '1,4', vf.join(',
 /* 高亮层是 token span 时，Range 实测仍要对齐 */
 svg = boot(NESTED, 'perl', { spans: true });
 const spanLines = parseLines(svg);
-check('token span 渲染下 x 仍为 24.5/56.5/88.5',
-  near(byLevel(spanLines, 1)[0].x, 24.5) && near(byLevel(spanLines, 2)[0].x, 56.5) &&
-  near(byLevel(spanLines, 3)[0].x, 88.5),
+check('token span 渲染下范围线仍在正文左侧',
+  near(byLevel(spanLines, 1)[0].x, 53.5) && near(byLevel(spanLines, 2)[0].x, 85.5) &&
+  near(byLevel(spanLines, 3)[0].x, 117.5),
   [1, 2, 3].map(lv => byLevel(spanLines, lv)[0].x).join(','));
+
+/* ============================================================
+   折叠范围 / 显示副本（纯逻辑）
+   ============================================================ */
+console.log('--- 折叠范围 ---');
+const core = sandbox.window.__ED_GUIDES__;
+const perlFold = ['sub a {', '    x;', '    y;', '}'];
+check('Perl 折叠到匹配的 }', JSON.stringify(core.foldRangeOf(perlFold, [0, 1, 1, 0], 0, 'perl')) ===
+  JSON.stringify({ start: 0, end: 3 }));
+const vfold = ['module m (', '    input a', ');', '  function f;', '    x;', '  endfunction', 'endmodule'];
+check('Verilog module 折叠到 endmodule',
+  JSON.stringify(core.foldRangeOf(vfold, [0, 2, 0, 1, 2, 1, 0], 0, 'verilog')) ===
+  JSON.stringify({ start: 0, end: 6 }));
+check('Verilog function 折叠到 endfunction',
+  JSON.stringify(core.foldRangeOf(vfold, [0, 2, 0, 1, 2, 1, 0], 3, 'verilog')) ===
+  JSON.stringify({ start: 3, end: 5 }));
+check('Python 按缩进折叠', JSON.stringify(core.foldRangeOf(['def f():', '    x', 'y'], [0, 1, 0], 0, 'python')) ===
+  JSON.stringify({ start: 0, end: 1 }));
+const disp = core.buildDisplay(perlFold, [{ start: 0, end: 3 }], 4, [0, 1, 1, 0]);
+check('显示副本用占位行代替隐藏行', disp.lines.length === 2 && disp.map[1].ph &&
+  disp.lines[1].startsWith('    …') && disp.map[1].count === 3,
+  JSON.stringify(disp));
 
 /* ============================================================
    2. 空行不打断；块结束后断线
@@ -368,7 +391,8 @@ const act = lines.filter(l => l.active);
 check('光标在 if 行时第 2 级高亮', act.length === 1 && act[0].level === 2 && act[0].from === 4 && act[0].to === 6, act.map(l => l.level + ':' + l.from + '-' + l.to).join());
 taEl.selectionStart = taEl.selectionEnd = taEl.value.split('\n').slice(0, 4).join('\n').length + 1; // 第 5 行，叶子
 sandbox.window.__ED_GUIDES__.draw();
-check('光标在叶子行时没有块可高亮', parseLines(readSvg()).every(l => !l.active));
+check('光标在叶子行时高亮所在块的范围线', (() => { const a = parseLines(readSvg()).filter(l => l.active);
+    return a.length === 1 && a[0].level === 3 && a[0].from === 5 && a[0].to === 5; })());
 
 /* ============================================================
    6. 边界：空文件、空行、单行

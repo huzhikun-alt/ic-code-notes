@@ -1,10 +1,9 @@
 /* ============================================================
-   缩进参考线 + 折叠箭头
-   参考 docs/reference-indent-guides.png 1:1 复刻：
-   - 每一级缩进列都有一条竖线，连续区间贯通，块结束即断
-   - 竖线画在「祖先缩进列」上（列 0、列 4、列 8…）
-   - 折叠箭头固定在行号与代码之间的窄条里，不随横向滚动
-   - 编辑器里正在编辑的块，对应的那条线高亮
+   范围参考线 + 折叠箭头
+   - 每一级作用域一条竖线，画在「这一层代码的左边」（正文左侧 3px）
+   - 线按连续区间贯通，块结束即断；空行不打断
+   - 折叠箭头固定在行号与代码之间的窄条里，可点击折叠/展开
+   - 光标所在块的范围线高亮；折叠时用占位行代替隐藏行
    ============================================================ */
 (() => {
   'use strict';
@@ -12,19 +11,27 @@
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const TAB_SIZE = 4;
 
-  /* 折叠箭头：宽 11.5、高 6、固定中心 x = 11.5（.ed-main 坐标；正文从 24 开始） */
+  /* 折叠箭头：宽 8.4、高 3.8，固定中心 x = 11.5（.ed-main 坐标；正文从 24 开始） */
   const CHEV_CX = 11.5;
-  const CHEV_HALF_W = 5.4;
-  const CHEV_HALF_H = 2.4;
-  const CHEV_LIFT = 1.4;
+  const CHEV_HALF_W = 4.2;
+  const CHEV_HALF_H = 1.9;
+  const CHEV_RIGHT_W = 1.9;
+  const CHEV_RIGHT_H = 3.0;
+  const CHEV_LIFT = 1.2;
   const CULL = 120;
+  /* 范围线贴在正文左边：线心比字符单元左边界再左 3px */
+  const GUIDE_GAP = 3;
 
   let svg = null;
   let ta = null, hl = null, main = null;
   let met = null;              // {charW, textLeft, padT, padL, lh, sig}
   let scheduled = 0;
   let boundTa = null;
+  let boundMain = null;
   let ro = null;
+  let lastCursor = '';
+  let foldStore = {};          // 文件 key -> [{start,end}]（模型行，0 基，end 含）
+  let lastFileKey = '';
 
   /* ============================================================
      纯逻辑：缩进 → 级 → 连续线段 → 可折叠行
@@ -136,23 +143,154 @@
     return out;
   }
 
-  /* 光标所在行对应的块：该行缩进列 → 第 (depth+1) 级；只在下方确实更深时高亮 */
+  /* 光标所表示的「范围线」：
+     - 光标在块起始行 → 高亮这个块的内容（第 depth+1 级，画在正文左侧）
+     - 光标在普通行/叶子 → 高亮它所在块的内容（第 depth 级，画在正文左侧） */
   function activeRangeOf(levels, caretLine) {
     let i = caretLine;
     if (i < 0 || i >= levels.length) return null;
     while (i >= 0 && levels[i] < 0) i--;
     if (i < 0) return null;
-    const level = levels[i] + 1;
+    const d = levels[i];
+
     let j = i + 1;
     while (j < levels.length && levels[j] < 0) j++;
-    if (j >= levels.length || levels[j] < level) return null;
-    let to = j;
-    for (let k = j + 1; k < levels.length; k++) {
-      if (levels[k] < 0) continue;
-      if (levels[k] >= level) to = k;
+    if (j < levels.length && levels[j] > d) {
+      const level = d + 1;
+      let to = j;
+      for (let k = j + 1; k < levels.length; k++) {
+        if (levels[k] < 0) continue;
+        if (levels[k] >= level) to = k;
+        else break;
+      }
+      return { level, from: j, to };
+    }
+
+    if (d < 1) return null;
+    const level = d;
+    let from = i, to = i;
+    while (from - 1 >= 0 && (levels[from - 1] >= level || levels[from - 1] < 0)) from--;
+    while (to + 1 < levels.length && (levels[to + 1] >= level || levels[to + 1] < 0)) to++;
+    return { level, from, to };
+  }
+
+  /* ============================================================
+     折叠范围（模型行）
+     ============================================================ */
+
+  /* 去注释/字符串，避免把 } / end 算错 */
+  function codeOnly(line, lang) {
+    let out = '', q = null;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i], n = line[i + 1];
+      if (q) {
+        if (c === '\\') { i++; continue; }
+        if (c === q) q = null;
+        continue;
+      }
+      if (c === '"' || c === "'") { q = c; continue; }
+      if (lang === 'verilog' && c === '/' && n === '/') break;
+      if ((lang === 'perl' || lang === 'python') && c === '#') break;
+      out += c;
+    }
+    return out;
+  }
+
+  const V_CLOSE_TYPE = {
+    endmodule: 'module', endfunction: 'function', endtask: 'task',
+    endgenerate: 'generate', endcase: 'case', join: 'fork',
+    join_any: 'fork', join_none: 'fork', end: 'begin'
+  };
+
+  function verilogRange(lines, start) {
+    const stack = [];
+    const feed = (code) => {
+      const re = /[A-Za-z_]\w*/g;
+      let m;
+      while ((m = re.exec(code))) {
+        const w = m[0];
+        if (w === 'module' || w === 'function' || w === 'task' || w === 'generate' ||
+            w === 'begin' || w === 'fork' || w === 'case' || w === 'casex' || w === 'casez') {
+          stack.push(w === 'casex' || w === 'casez' ? 'case' : w);
+        } else if (V_CLOSE_TYPE[w]) {
+          const want = V_CLOSE_TYPE[w];
+          for (let k = stack.length - 1; k >= 0; k--) {
+            if (stack[k] === want) { stack.length = k; break; }
+          }
+        }
+      }
+    };
+    feed(codeOnly(lines[start], 'verilog'));
+    if (!stack.length) return null;
+    for (let j = start + 1; j < lines.length; j++) {
+      feed(codeOnly(lines[j], 'verilog'));
+      if (!stack.length) return j > start ? { start, end: j } : null;
+    }
+    return null;
+  }
+
+  function perlRange(lines, start) {
+    let depth = 0;
+    const feed = (code) => {
+      for (let i = 0; i < code.length; i++) {
+        if (code[i] === '{') depth++;
+        else if (code[i] === '}') depth--;
+      }
+    };
+    feed(codeOnly(lines[start], 'perl'));
+    if (depth <= 0) return null;
+    for (let j = start + 1; j < lines.length; j++) {
+      feed(codeOnly(lines[j], 'perl'));
+      if (depth <= 0) return j > start ? { start, end: j } : null;
+    }
+    return null;
+  }
+
+  function indentRange(lines, raw, start) {
+    let end = start;
+    for (let j = start + 1; j < lines.length; j++) {
+      if (!lines[j] || !lines[j].trim()) continue;
+      if (raw[j] > raw[start]) end = j;
       else break;
     }
-    return { level, from: i, to };
+    return end > start ? { start, end } : null;
+  }
+
+  /* 点击箭头时真正要隐藏的模型行区间 [start, end]（end 含） */
+  function foldRangeOf(lines, raw, start, lang) {
+    if (start < 0 || start >= lines.length) return null;
+    let j = start + 1;
+    while (j < lines.length && (!lines[j] || !lines[j].trim())) j++;
+    if (j >= lines.length || raw[j] <= raw[start]) return null;
+    let r = null;
+    if (lang === 'verilog') r = verilogRange(lines, start);
+    else if (lang === 'perl') r = perlRange(lines, start);
+    if (!r) r = indentRange(lines, raw, start);
+    return (r && r.end > r.start) ? r : null;
+  }
+
+  /* 显示副本：隐藏行 → 一行 "… (N 行已折叠)" */
+  function buildDisplay(lines, ranges, unit, raw) {
+    const byStart = {};
+    ranges.forEach(r => { byStart[r.start] = r; });
+    const hidden = new Uint8Array(lines.length);
+    ranges.forEach(r => {
+      for (let i = r.start + 1; i <= r.end && i < lines.length; i++) hidden[i] = 1;
+    });
+    const out = [], map = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (hidden[i]) continue;
+      out.push(lines[i]);
+      map.push({ model: i });
+      const r = byStart[i];
+      if (r) {
+        const count = r.end - r.start;
+        const indent = ' '.repeat(Math.max(0, (raw[i] + 1) * unit));
+        out.push(indent + '… (' + count + ' 行已折叠)');
+        map.push({ ph: true, start: r.start, from: r.start + 1, to: r.end, count });
+      }
+    }
+    return { lines: out, map };
   }
 
   /* ============================================================
@@ -296,6 +434,254 @@
   }
 
   /* ============================================================
+     折叠视图：状态、映射、展开/收起
+     ============================================================ */
+
+  function fileKey() {
+    try { return (typeof nkey === 'function') ? nkey() : ''; } catch (e) { return ''; }
+  }
+  function foldRanges() {
+    const k = fileKey();
+    return foldStore[k] || [];
+  }
+  function setFoldRanges(r) {
+    foldStore[fileKey()] = r;
+  }
+  function isFoldedModel(model) {
+    const rs = foldRanges();
+    for (let i = 0; i < rs.length; i++) if (rs[i].start === model) return true;
+    return false;
+  }
+  function viewOf() {
+    return (window.ED && window.ED.getFoldView) ? window.ED.getFoldView() : null;
+  }
+  function displayIndexOfModel(view, model) {
+    if (!view) return model;
+    for (let i = 0; i < view.map.length; i++) {
+      const e = view.map[i];
+      if (e.ph) { if (model >= e.from && model <= e.to) return i; }
+      else if (e.model === model) return i;
+    }
+    return -1;
+  }
+  function focusModelLine(model) {
+    const f = currentFile(); if (!f) return;
+    const view = viewOf();
+    const di = displayIndexOfModel(view, model);
+    if (di < 0) return;
+    const lines = view ? view.lines : f.lines;
+    let off = 0;
+    for (let i = 0; i < di; i++) off += lines[i].length + 1;
+    off += lines[di].length;
+    const st = ta.scrollTop, sl = ta.scrollLeft;
+    ta.setSelectionRange(off, off);
+    ta.focus();
+    /* focus() 可能把视口滚到选区；折叠时不能因此跳走 */
+    ta.scrollTop = st;
+    ta.scrollLeft = sl;
+  }
+
+  function applyFoldView() {
+    const f = currentFile(); if (!f) return;
+    const docTa = ta || document.getElementById('edInput');
+    if (!docTa) return;
+    const mm = met || measureMetrics(f.lines);
+    const oldView = viewOf();
+    /* 以「视口顶部那一行」为锚，折叠/展开上方块时画面不跳 */
+    const top = Math.max(0, Math.floor((docTa.scrollTop + mm.padT) / mm.lh));
+    const topEntry = oldView ? oldView.map[top] : null;
+    const anchor = topEntry ? (topEntry.ph ? topEntry.from : topEntry.model) : top;
+    const oldDi = displayIndexOfModel(oldView, anchor);
+    const beforeY = oldDi >= 0 ? mm.padT + oldDi * mm.lh - docTa.scrollTop : null;
+
+    const unit = detectUnit(f.lines, f.lang, TAB_SIZE);
+    const raw = levelsOf(f.lines, unit, TAB_SIZE);
+    const ranges = foldRanges().filter(r => r.start >= 0 && r.start < f.lines.length &&
+      r.end > r.start && r.end < f.lines.length);
+    let view = null;
+    if (ranges.length) view = buildDisplay(f.lines, ranges, unit, raw);
+    if (!view || view.lines.length === f.lines.length) {
+      setFoldRanges([]);
+      view = null;
+    }
+    if (window.ED && ED.setFoldView) ED.setFoldView(view);
+    else return;
+
+    if (beforeY != null) {
+      const nv = viewOf();
+      const ndi = displayIndexOfModel(nv, anchor);
+      if (ndi >= 0) docTa.scrollTop = Math.max(0, mm.padT + ndi * mm.lh - beforeY);
+    }
+    docTa.dispatchEvent(new Event('scroll'));
+    schedule();
+  }
+
+  function toggleFold(modelStart) {
+    const f = currentFile(); if (!f) return;
+    const unit = detectUnit(f.lines, f.lang, TAB_SIZE);
+    const raw = levelsOf(f.lines, unit, TAB_SIZE);
+    let ranges = foldRanges().slice();
+    const idx = ranges.findIndex(r => r.start === modelStart);
+    if (idx >= 0) {
+      ranges.splice(idx, 1);
+    } else {
+      const range = foldRangeOf(f.lines, raw, modelStart, f.lang);
+      if (!range) return;
+      ranges = ranges.filter(r => !(r.start > range.start && r.start <= range.end));
+      ranges.push(range);
+    }
+    ranges.sort((a, b) => a.start - b.start);
+    setFoldRanges(ranges);
+    applyFoldView();
+    focusModelLine(modelStart);
+  }
+
+  function expandFold(start) {
+    setFoldRanges(foldRanges().filter(r => r.start !== start));
+    applyFoldView();
+    focusModelLine(start);
+  }
+
+  function expandAll() {
+    const f = currentFile(); if (!f) return;
+    const docTa = ta || document.getElementById('edInput');
+    const view = viewOf();
+    const mm = met || measureMetrics(f.lines);
+    let anchor = null, beforeY = null;
+    if (view && docTa) {
+      const top = Math.max(0, Math.floor((docTa.scrollTop + mm.padT) / mm.lh));
+      const e = view.map[top];
+      anchor = e ? (e.ph ? e.from : e.model) : top;
+      const di = displayIndexOfModel(view, anchor);
+      if (di >= 0) beforeY = mm.padT + di * mm.lh - docTa.scrollTop;
+    }
+    setFoldRanges([]);
+    if (window.ED && ED.setFoldView) ED.setFoldView(null);
+    if (docTa) {
+      if (anchor != null && beforeY != null) {
+        docTa.scrollTop = Math.max(0, mm.padT + anchor * mm.lh - beforeY);
+      }
+      docTa.dispatchEvent(new Event('scroll'));
+    }
+    schedule();
+  }
+
+  /* 在折叠视图里开始编辑：先展开，再把光标映射回模型坐标 */
+  function expandForEdit() {
+    const f = currentFile(); if (!f) return;
+    const view = viewOf(); if (!view) return;
+    const docTa = ta || document.getElementById('edInput');
+    if (!docTa) return;
+    const mm = met || measureMetrics(f.lines);
+    const mstarts = [];
+    let macc = 0;
+    for (let i = 0; i < f.lines.length; i++) { mstarts.push(macc); macc += f.lines[i].length + 1; }
+    const mapPos = (pos, isEnd) => {
+      const before = docTa.value.slice(0, pos);
+      const parts = before.split('\n');
+      const dl = parts.length - 1;
+      const col = parts[parts.length - 1].length;
+      const e = view.map[dl];
+      if (!e) return pos;
+      if (e.ph) {
+        if (!isEnd) return mstarts[Math.min(e.from, f.lines.length - 1)];
+        if (e.to + 1 < f.lines.length) return mstarts[e.to + 1];
+        return macc;
+      }
+      return mstarts[e.model] + Math.min(col, f.lines[e.model].length);
+    };
+    const collapsed = docTa.selectionStart === docTa.selectionEnd;
+    const s = mapPos(docTa.selectionStart, false);
+    const e = collapsed ? s : mapPos(docTa.selectionEnd, true);
+    setFoldRanges([]);
+    if (window.ED && ED.setFoldView) ED.setFoldView(null);
+    docTa.focus();
+    const max = docTa.value.length;
+    docTa.setSelectionRange(Math.min(s, max), Math.min(e, max));
+    const line = docTa.value.slice(0, Math.min(s, max)).split('\n').length;
+    docTa.scrollTop = Math.max(0, (line - 1) * mm.lh - 120);
+    docTa.dispatchEvent(new Event('scroll'));
+    schedule();
+  }
+
+  function isEditKey(ev) {
+    const k = ev.key;
+    if (!k) return false;
+    if (k === 'Process') return true;
+    if (k === 'Enter' || k === 'Backspace' || k === 'Delete' || k === 'Tab') return true;
+    if ((ev.ctrlKey || ev.metaKey) && /^[vxzy]$/i.test(k)) return true;
+    if (ev.shiftKey && k === 'Insert') return true;
+    if (k.length === 1 && !ev.ctrlKey && !ev.metaKey && !ev.altKey) return true;
+    return false;
+  }
+
+  function foldHitAt(x, y) {
+    if (!svg) return null;
+    const paths = svg.querySelectorAll('path.fold');
+    for (let i = 0; i < paths.length; i++) {
+      const r = paths[i].getBoundingClientRect();
+      if (x >= r.left - 4 && x <= r.right + 4 && y >= r.top - 4 && y <= r.bottom + 4) {
+        const dl = +paths[i].getAttribute('data-line');
+        const model = +paths[i].getAttribute('data-model');
+        return { line: dl - 1, model: model > 0 ? model - 1 : dl - 1 };
+      }
+    }
+    return null;
+  }
+
+  function placeholderAt(x, y) {
+    const view = viewOf(); if (!view) return null;
+    const f = currentFile(); if (!f) return null;
+    const mm = met || measureMetrics(f.lines);
+    const mr = main.getBoundingClientRect();
+    const yc = y - mr.top + (ta.scrollTop || 0);
+    const dl = Math.floor((yc - mm.padT) / mm.lh);
+    const e = view.map[dl];
+    return e && e.ph ? e : null;
+  }
+
+  function onFoldMouseDown(ev) {
+    if (ev.target !== ta) return;
+    const hit = foldHitAt(ev.clientX, ev.clientY);
+    if (hit) {
+      ev.preventDefault(); ev.stopPropagation();
+      toggleFold(hit.model);
+      return;
+    }
+    const ph = placeholderAt(ev.clientX, ev.clientY);
+    if (ph) {
+      ev.preventDefault(); ev.stopPropagation();
+      expandFold(ph.start);
+    }
+  }
+
+  function onFoldMouseMove(ev) {
+    if (!ta || ev.target !== ta) return;
+    const over = !!(foldHitAt(ev.clientX, ev.clientY) || placeholderAt(ev.clientX, ev.clientY));
+    const want = over ? 'pointer' : '';
+    if (want !== lastCursor) { ta.style.cursor = want; lastCursor = want; }
+  }
+
+  function onFoldKeyDown(ev) {
+    if (ev.target !== ta) return;
+    if (!viewOf()) return;
+    if (!isEditKey(ev)) return;
+    expandForEdit();
+  }
+
+  function onFoldBeforeInput(ev) {
+    if (ev.target !== ta) return;
+    if (!viewOf()) return;
+    const t = ev.inputType || '';
+    if (/^(insert|delete|history)/.test(t)) expandForEdit();
+  }
+
+  function onFoldComposition(ev) {
+    if (ev && ev.target !== ta) return;
+    if (viewOf()) expandForEdit();
+  }
+
+  /* ============================================================
      渲染
      ============================================================ */
 
@@ -322,6 +708,14 @@
     const mainChanged = nextMain !== main;
     hl = nextHl;
     main = nextMain;
+    if (mainChanged && boundMain !== main) {
+      boundMain = main;
+      main.addEventListener('keydown', onFoldKeyDown, true);
+      main.addEventListener('mousedown', onFoldMouseDown, true);
+      main.addEventListener('beforeinput', onFoldBeforeInput, true);
+      main.addEventListener('compositionstart', onFoldComposition, true);
+      main.addEventListener('mousemove', onFoldMouseMove, { passive: true });
+    }
     if (mainChanged && window.ResizeObserver) {
       if (ro) { try { ro.disconnect(); } catch (e) {} }
       ro = new window.ResizeObserver(() => schedule());
@@ -356,6 +750,14 @@
 
   const snap = v => (Math.round(v) + 0.5).toFixed(1);
   const fmt = v => (Math.round(v * 10) / 10).toFixed(1);
+  const downChevron = (cx, cy) =>
+    'M' + fmt(cx - CHEV_HALF_W) + ' ' + fmt(cy - CHEV_HALF_H) +
+    ' L' + fmt(cx) + ' ' + fmt(cy + CHEV_HALF_H) +
+    ' L' + fmt(cx + CHEV_HALF_W) + ' ' + fmt(cy - CHEV_HALF_H);
+  const rightChevron = (cx, cy) =>
+    'M' + fmt(cx - CHEV_RIGHT_W) + ' ' + fmt(cy - CHEV_RIGHT_H) +
+    ' L' + fmt(cx + CHEV_RIGHT_W) + ' ' + fmt(cy) +
+    ' L' + fmt(cx - CHEV_RIGHT_W) + ' ' + fmt(cy + CHEV_RIGHT_H);
 
   function draw() {
     scheduled = 0;
@@ -363,12 +765,23 @@
     const f = currentFile();
     if (!f) { if (svg) svg.innerHTML = ''; return; }
 
+    /* 折叠状态与 ed.js 的显示副本保持同步 */
+    const fk = fileKey();
+    if (fk !== lastFileKey) { lastFileKey = fk; foldStore = {}; }
+    const view = viewOf();
+    if (view) {
+      setFoldRanges(view.map.filter(e => e.ph).map(e => ({ start: e.start, end: e.to })));
+    } else if (foldRanges().length) {
+      setFoldRanges([]);
+    }
+    const lines = view ? view.lines : f.lines;
+
     const m = measureMetrics(f.lines);
     const unit = detectUnit(f.lines, f.lang, TAB_SIZE);
-    const raw = levelsOf(f.lines, unit, TAB_SIZE);
+    const raw = levelsOf(lines, unit, TAB_SIZE);
     const eff = inheritBlankLevels(raw);
     const segs = segmentsOf(eff);
-    const folds = foldLinesOf(f.lines, raw);
+    const folds = foldLinesOf(lines, raw);
     const active = activeRangeOf(raw, caretLine());
 
     const sx = ta.scrollLeft || 0;
@@ -385,13 +798,14 @@
     svg.style.transform = 'translate(' + (-sx) + 'px,' + (-sy) + 'px)';
     svg.setAttribute('data-unit', unit);
     svg.setAttribute('data-charw', m.charW.toFixed(3));
+    svg.setAttribute('data-folded', view ? '1' : '0');
 
     const out = [];
     const vTop = sy - CULL, vBot = sy + viewH + CULL;
 
     function pushLine(level, from, to, isActive) {
       if (to < from) return;
-      const x = snap(m.textLeft + (level - 1) * unit * m.charW);
+      const x = snap(m.textLeft + level * unit * m.charW - GUIDE_GAP);
       const y1 = m.padT + from * m.lh;
       const y2 = m.padT + (to + 1) * m.lh;
       if (y2 < vTop || y1 > vBot) return;
@@ -420,13 +834,15 @@
     /* 折叠箭头固定在屏幕列：加回 scrollLeft 抵消 SVG 的横向平移 */
     for (let i = 0; i < folds.length; i++) {
       const idx = folds[i];
+      const entry = view ? view.map[idx] : null;
+      const modelLine = entry ? (entry.ph ? entry.from : entry.model) : idx;
+      const collapsed = isFoldedModel(modelLine);
       const cy = m.padT + idx * m.lh + m.lh / 2 - CHEV_LIFT;
       if (cy < vTop || cy > vBot) continue;
       const cx = CHEV_CX + sx;
-      const d = 'M' + fmt(cx - CHEV_HALF_W) + ' ' + fmt(cy - CHEV_HALF_H) +
-        ' L' + fmt(cx) + ' ' + fmt(cy + CHEV_HALF_H) +
-        ' L' + fmt(cx + CHEV_HALF_W) + ' ' + fmt(cy - CHEV_HALF_H);
-      out.push('<path d="' + d + '" class="fold" data-line="' + (idx + 1) + '"/>');
+      const d = collapsed ? rightChevron(cx, cy) : downChevron(cx, cy);
+      out.push('<path d="' + d + '" class="fold' + (collapsed ? ' collapsed' : '') +
+        '" data-line="' + (idx + 1) + '" data-model="' + (modelLine + 1) + '"/>');
     }
 
     svg.innerHTML = out.join('');
@@ -461,9 +877,16 @@
   window.__ED_GUIDES__ = {
     visualIndent, detectUnit, levelsOf, inheritBlankLevels,
     segmentsOf, foldLinesOf, activeRangeOf,
+    foldRangeOf, buildDisplay,
     measure: () => measureMetrics(currentFile() ? currentFile().lines : null),
     draw, schedule,
     reset() { met = null; schedule(); }
+  };
+
+  window.__ED_FOLDS__ = {
+    toggleFold, expandFold, expandAll,
+    ranges: () => foldRanges(),
+    clear() { setFoldRanges([]); if (window.ED && ED.setFoldView) ED.setFoldView(null); }
   };
 
   start();

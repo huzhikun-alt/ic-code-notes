@@ -89,6 +89,9 @@
 .ed-guides .gline.active{stroke:color-mix(in srgb,var(--ink) 55%,var(--paper))}
 .ed-guides .fold{fill:none;stroke:color-mix(in srgb,var(--ink) 55%,var(--paper));
   stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round}
+/* 折叠后的占位行 / 只读状态 */
+.ed-hl .fold-ph{color:var(--muted);font-style:italic}
+.ed-input.folded{caret-color:var(--muted)}
 
 /* 旧控件隐藏（回归修复） */
 #noteMode,#splitter,#btnRawEdit,#raw,.editbar{display:none!important}

@@ -10,10 +10,19 @@
 
   let built = false;
   let host, ta, hl, gutter;
+  /* 折叠视图：lines 是显示行；map[i] = {model:0基模型行} 或 {ph:true, from, to, start} */
+  let foldView = null;
 
   const $ = s => document.querySelector(s);
   const curFile = () => (hasFile() ? files()[cur] : null);
   const noteMap = () => (NOTES[nkey()] = NOTES[nkey()] || {});
+
+  function displayLines(f) { return foldView ? foldView.lines : f.lines; }
+  function expandFolds() {
+    if (!foldView) return;
+    if (window.__ED_FOLDS__ && window.__ED_FOLDS__.expandAll) window.__ED_FOLDS__.expandAll();
+    else { foldView = null; render(); }
+  }
 
   /* ---------------- 构建 ---------------- */
   function build() {
@@ -98,6 +107,7 @@
     const f = curFile();
     host = document.getElementById(HOST_ID);
     if (!f) {
+      foldView = null;
       host.innerHTML = '<div class="emptyfile">这个工程还没有文件。<br>' +
         '<button id="eNew">＋ 新建一个文件</button></div>';
       const b = document.getElementById('eNew');
@@ -107,12 +117,22 @@
     }
     build();
 
-    const text = f.lines.join('\n');
+    /* 文件切换 / 模型被撤销改动时，折叠视图失效 */
+    if (foldView) {
+      let ok = foldView.fileKey === nkey() && foldView.map && foldView.lines &&
+        foldView.lines.length === foldView.map.length &&
+        foldView.map.every((e, i) => e.ph || (f.lines[e.model] === foldView.lines[i]));
+      if (!ok) foldView = null;
+    }
+
+    const text = displayLines(f).join('\n');
     if (ta.value !== text) {
       const st = ta.scrollTop, sl = ta.scrollLeft;
       ta.value = text;
       ta.scrollTop = st; ta.scrollLeft = sl;
     }
+    ta.readOnly = !!foldView;
+    ta.classList.toggle('folded', !!foldView);
     resolveAnchors(f);
     paintAll(); paintCaretInfo();
 
@@ -139,26 +159,34 @@
     const kws = new Set((window.KEYWORDS || {})[f.lang] || []);
     const nm = NOTES[nkey()] || {};
     const mark = (f.lang === 'verilog') ? '  // ' : '  # ';
+    const view = foldView;
+    const lines = view ? view.lines : f.lines;
     const out = [];
-    for (let i = 0; i < f.lines.length; i++) {
-      const line = f.lines[i];
+    for (let i = 0; i < lines.length; i++) {
+      const entry = view ? view.map[i] : null;
       let html = '';
-      if (line) {
-        tokenize(line, f.lang).forEach(tk => {
-          let cls;
-          if (tk.t === 'id' && names.has(tk.v)) cls = 'fx';
-          else cls = 'tk-' + (tk.t === 'id' ? (kws.has(tk.v) ? 'k' : 'p') : tk.t);
-          html += '<span class="' + cls + '">' + esc(tk.v) + '</span>';
-        });
+      if (entry && entry.ph) {
+        html = '<span class="fold-ph">' + esc(lines[i]) + '</span>';
       } else {
-        html = ' ';
-      }
-      const n = nm[i + 1];
-      if (n && String(n.text || '').trim()) {
-        const raw = String(n.text).replace(/\s+/g, ' ').trim();
-        const shown = raw.length > 72 ? raw.slice(0, 72) + '…' : raw;
-        html += '<span class="nl-inline' + (n.author === 'ai' ? ' ai' : '') + '">' +
-          esc(mark + shown) + '</span>';
+        const line = lines[i];
+        if (line) {
+          tokenize(line, f.lang).forEach(tk => {
+            let cls;
+            if (tk.t === 'id' && names.has(tk.v)) cls = 'fx';
+            else cls = 'tk-' + (tk.t === 'id' ? (kws.has(tk.v) ? 'k' : 'p') : tk.t);
+            html += '<span class="' + cls + '">' + esc(tk.v) + '</span>';
+          });
+        } else {
+          html = ' ';
+        }
+        const modelLine = entry ? entry.model + 1 : i + 1;
+        const n = nm[modelLine];
+        if (n && String(n.text || '').trim()) {
+          const raw = String(n.text).replace(/\s+/g, ' ').trim();
+          const shown = raw.length > 72 ? raw.slice(0, 72) + '…' : raw;
+          html += '<span class="nl-inline' + (n.author === 'ai' ? ' ai' : '') + '">' +
+            esc(mark + shown) + '</span>';
+        }
       }
       out.push(html);
     }
@@ -167,14 +195,21 @@
 
   function paintGutter() {
     const f = curFile(); if (!f) return;
+    const view = foldView;
+    const lines = view ? view.lines : f.lines;
     let s = '';
-    for (let i = 1; i <= f.lines.length; i++) s += i + '\n';
+    for (let i = 0; i < lines.length; i++) {
+      if (view && view.map[i] && view.map[i].ph) s += '⋮';
+      else s += (view ? view.map[i].model + 1 : i + 1);
+      s += '\n';
+    }
     gutter.textContent = s;
   }
 
   /* ---------------- 编辑 ---------------- */
   function onInput() {
     const f = curFile(); if (!f) return;
+    if (foldView) return;   // 折叠视图只读；输入前会先展开
     const old = f.lines.slice();
     const lines = ta.value.split('\n');
     f.lines = lines.length ? lines : [''];
@@ -311,7 +346,7 @@
     const before = ta.value.slice(0, pos);
     const lineNo = before.split('\n').length;
     const col = before.length - (before.lastIndexOf('\n') + 1);
-    const text = f.lines[lineNo - 1] || '';
+    const text = ta.value.split('\n')[lineNo - 1] || '';
 
     let i = col, j = col;
     while (i > 0 && /[A-Za-z0-9_$]/.test(text[i - 1])) i--;
@@ -338,6 +373,7 @@
   }
   function openNoteEditor(line) {
     const f = curFile(); if (!f) return;
+    if (foldView) expandFolds();
     closeNoteEditor();
     const note = noteMap()[line];
     const box = document.createElement('div');
@@ -383,13 +419,20 @@
   window.openNoteEditor = openNoteEditor;
 
   function caretLine() {
-    const pos = ta ? ta.selectionStart : 0;
-    return ta ? ta.value.slice(0, pos).split('\n').length : 1;
+    if (!ta) return 1;
+    const pos = ta.selectionStart;
+    const dl = ta.value.slice(0, pos).split('\n').length;   // 显示行，1 基
+    if (foldView && foldView.map[dl - 1]) {
+      const e = foldView.map[dl - 1];
+      return (e.ph ? e.from : e.model) + 1;
+    }
+    return dl;
   }
 
   /* 跳到某一行并把光标放过去 */
   function gotoLine(line) {
     if (!ta) return;
+    if (foldView) expandFolds();
     const lines = ta.value.split('\n');
     let pos = 0;
     for (let i = 0; i < line - 1 && i < lines.length; i++) pos += lines[i].length + 1;
@@ -402,10 +445,20 @@
 
   function selectedLines() {
     if (!ta) return null;
-    if (ta.selectionStart === ta.selectionEnd) return { from: caretLine(), to: caretLine(), text: '' };
-    const before = ta.value.slice(0, ta.selectionStart);
-    const from = before.split('\n').length;
-    const to = ta.value.slice(0, ta.selectionEnd).split('\n').length;
+    const dlOf = pos => ta.value.slice(0, pos).split('\n').length;
+    const mlOf = dl => {
+      if (foldView && foldView.map[dl - 1]) {
+        const e = foldView.map[dl - 1];
+        return (e.ph ? e.from : e.model) + 1;
+      }
+      return dl;
+    };
+    if (ta.selectionStart === ta.selectionEnd) {
+      const l = caretLine();
+      return { from: l, to: l, text: '' };
+    }
+    const from = mlOf(dlOf(ta.selectionStart));
+    const to = mlOf(dlOf(ta.selectionEnd));
     return { from, to, text: ta.value.slice(ta.selectionStart, ta.selectionEnd) };
   }
 
@@ -413,6 +466,17 @@
   window.ED = {
     afterRender(fn) { afterHooks.push(fn); },
     render, addNote, putNote, noteAt, removeNote, caretLine, gotoLine, selectedLines,
+    setFoldView(view) {
+      if (!curFile()) { foldView = null; return; }
+      foldView = view ? {
+        fileKey: nkey(),
+        lines: view.lines.slice(),
+        map: view.map
+      } : null;
+      render();
+    },
+    getFoldView() { return foldView; },
+    isFolded() { return !!foldView; },
     focusBody(line) {
       if (typeof openNoteEditor === 'function') openNoteEditor(line);
     }

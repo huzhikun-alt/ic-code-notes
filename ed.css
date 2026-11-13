@@ -109,10 +109,6 @@
   overflow:hidden;background:var(--paper)}
 .monaco-wrap{position:absolute;inset:0}
 /* Native Monaco gutter: no custom full-height divider between numbers and folding lane. */
-/* Move native indentation guides from the cell's left edge to its character center. */
-.monaco-code-host .monaco-editor .core-guide-indent.vertical{
-  transform: translateX(calc(var(--monaco-space-width, 7.1484375px) / 2));
-}
 .monaco-code-host .nl-editor{z-index:60}
 .monaco-code-host .ed-fnbar{z-index:55}
 

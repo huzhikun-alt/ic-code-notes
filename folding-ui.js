@@ -1,3 +1,4 @@
+/* DEPRECATED: 当前编辑器是 ed-monaco.js（Monaco 0.57），本文件不再加载 */
 /* Folding controls/controller. Behavior port references: folding.ts:396-510, folding.css.
  * Canonical ranges live ONLY in EditorFolding; this layer contains no range detection. */
 (() => {

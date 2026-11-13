@@ -213,15 +213,6 @@
       fixedOverflowWidgets: true, contextmenu: true
     });
 
-    const setGuideMetrics = () => {
-      if (!editor || !host) return;
-      const fi = editor.getOption(monaco.editor.EditorOption.fontInfo);
-      const sw = fi && fi.spaceWidth ? fi.spaceWidth : 7.1484375;
-      host.style.setProperty('--monaco-space-width', sw + 'px');
-    };
-    setGuideMetrics();
-    editor.onDidLayoutChange(setGuideMetrics);
-
     noteDecos = editor.createDecorationsCollection([]);
     editor.onDidChangeModelContent(onChange);
     editor.onDidChangeCursorPosition(() => { paintCaretInfo(); emit(); });

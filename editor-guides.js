@@ -1,3 +1,4 @@
+/* DEPRECATED: 当前编辑器是 ed-monaco.js（Monaco 0.57），本文件不再加载 */
 /* Indent guide overlay, independent of folding ranges and gutter decorations.
  * Semantics: docs/vscode-reference/indentGuides.ts (MIT, Microsoft), especially
  * getGuidesByLine's source merge. Whitespace resolution follows VS Code's

@@ -1,0 +1,3 @@
+﻿VS Code commit: 1745a4a6102e93173430b4b2debc1247a91cd036
+Codicons npm: @vscode/codicons@0.0.46-49
+Downloaded from raw.githubusercontent.com/microsoft/vscode/1745a4a6102e93173430b4b2debc1247a91cd036/

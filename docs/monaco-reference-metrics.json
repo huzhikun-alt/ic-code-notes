@@ -1,0 +1,92 @@
+{
+  "layout": {
+    "width": 760,
+    "height": 500,
+    "glyphMarginLeft": 0,
+    "glyphMarginWidth": 0,
+    "glyphMarginDecorationLaneCount": 1,
+    "lineNumbersLeft": 0,
+    "lineNumbersWidth": 21,
+    "decorationsLeft": 21,
+    "decorationsWidth": 38,
+    "contentLeft": 59,
+    "contentWidth": 701,
+    "minimap": {
+      "renderMinimap": 0,
+      "minimapLeft": 0,
+      "minimapWidth": 0,
+      "minimapHeightIsEditorHeight": false,
+      "minimapIsSampling": false,
+      "minimapScale": 1,
+      "minimapLineHeight": 1,
+      "minimapCanvasInnerWidth": 0,
+      "minimapCanvasInnerHeight": 500,
+      "minimapCanvasOuterWidth": 0,
+      "minimapCanvasOuterHeight": 500
+    },
+    "viewportColumn": 95,
+    "isWordWrapMinified": false,
+    "isViewportWrapping": false,
+    "wrappingColumn": -1,
+    "verticalScrollbarWidth": 14,
+    "horizontalScrollbarHeight": 12,
+    "overviewRuler": {
+      "top": 0,
+      "width": 14,
+      "height": 500,
+      "right": 0
+    }
+  },
+  "font": {
+    "_bareFontInfoBrand": null,
+    "pixelRatio": 1,
+    "fontFamily": "Consolas, monospace",
+    "fontWeight": "normal",
+    "fontSize": 13,
+    "fontFeatureSettings": "\"liga\" off, \"calt\" off",
+    "fontVariationSettings": "normal",
+    "lineHeight": 22,
+    "letterSpacing": 0,
+    "_editorStylingBrand": null,
+    "version": 2,
+    "isTrusted": true,
+    "isMonospace": true,
+    "typicalHalfwidthCharacterWidth": 7.1484375,
+    "typicalFullwidthCharacterWidth": 13,
+    "canUseHalfwidthRightwardsArrow": false,
+    "spaceWidth": 7.1484375,
+    "middotWidth": 7.1484375,
+    "wsmiddotWidth": 3.9375,
+    "maxDigitWidth": 7.1484375
+  },
+  "icon": [
+    {
+      "rect": {
+        "x": 23,
+        "y": 16,
+        "width": 38,
+        "height": 22,
+        "top": 16,
+        "right": 61,
+        "bottom": 38,
+        "left": 23
+      },
+      "font": "18.2px",
+      "color": "rgb(197, 197, 197)"
+    },
+    {
+      "rect": {
+        "x": 23,
+        "y": 38,
+        "width": 38,
+        "height": 22,
+        "top": 38,
+        "right": 61,
+        "bottom": 60,
+        "left": 23
+      },
+      "font": "18.2px",
+      "color": "rgb(197, 197, 197)"
+    }
+  ]
+}

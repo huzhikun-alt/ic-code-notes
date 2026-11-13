@@ -190,7 +190,6 @@
     wrap = document.createElement('div');
     wrap.className = 'monaco-wrap';
     host.appendChild(wrap);
-    bindInlineNoteClick();
 
     editor = monaco.editor.create(wrap, {
       value: '', language: 'plaintext', theme: themeName(),
@@ -222,10 +221,10 @@
     editor.onDidBlurEditorText(() => emit());
 
     const addBtn = document.getElementById('btnAddNote');
-    if (addBtn) addBtn.addEventListener('click', () => openNoteEditor(caretLine()));
+    if (addBtn) addBtn.addEventListener('click', () => insertInlineNote());
     document.addEventListener('keydown', ev => {
       if (ev.altKey && ev.ctrlKey && (ev.key === 'm' || ev.key === 'M')) {
-        ev.preventDefault(); openNoteEditor(caretLine());
+        ev.preventDefault(); insertInlineNote();
       }
     });
     for (const [id, action] of [['btnUndo', 'undo'], ['btnRedo', 'redo']]) {
@@ -269,34 +268,48 @@
     const metaEl = document.getElementById('fmeta');
     if (pathEl) pathEl.textContent = f ? curProj + '/' + f.path : curProj;
     if (langEl) langEl.textContent = f ? (typeof LANGS !== 'undefined' ? LANGS[f.lang] : f.lang) : '—';
-    if (metaEl) metaEl.textContent = f ? f.lines.length + ' 行 · ' + Object.keys(NOTES[nkey()] || {}).length + ' 条批注' : '';
+    if (metaEl) metaEl.textContent = f ? f.lines.length + ' 行 · ' +
+      f.lines.filter(l => / {2}(#|\/\/) /.test(l)).length + ' 条行末批注' : '';
+  }
+
+  function noteMark(f) { return f.lang === 'verilog' ? '  // ' : '  # '; }
+
+  /* 批注一律落成正文：直接写在行尾，像普通注释一样可以用退格/选中删除。
+     不再用 decoration 渲染，也不再弹编辑框——用户要的是 VS Code 那种编辑器行为。 */
+  function materializeNotes() {
+    if (!editor || !model || !curFile()) return 0;
+    const f = curFile(), nm = NOTES[nkey()];
+    if (!nm) return 0;
+    const mark = noteMark(f);
+    const keys = Object.keys(nm).map(Number).sort((a, b) => a - b);
+    const edits = [];
+    keys.forEach(ln => {
+      const n = nm[ln];
+      const text = n && String(n.text || '').replace(/\s+/g, ' ').trim();
+      if (!text || !Number.isInteger(ln) || ln < 1 || ln > model.getLineCount()) { delete nm[ln]; return; }
+      const line = model.getLineContent(ln);
+      if (line.includes(text)) { delete nm[ln]; return; }
+      const col = line.length + 1;
+      edits.push({ range: new monaco.Range(ln, col, ln, col), text: mark + text });
+      delete nm[ln];
+    });
+    if (edits.length) {
+      suppress = true;
+      model.applyEdits(edits);
+      suppress = false;
+      f.lines = model.getValue().split('\n');
+      try { saveAll(); } catch (_) {}
+    } else {
+      try { saveAll(); } catch (_) {}
+    }
+    return edits.length;
   }
 
   function updateNotes() {
-    if (!editor || !noteDecos || !curFile()) return;
-    const f = curFile(), nm = NOTES[nkey()] || {}, decos = [];
-    const mark = f.lang === 'verilog' ? '  // ' : '  # ';
-    for (const key of Object.keys(nm)) {
-      const ln = Number(key), n = nm[key];
-      if (!n || !String(n.text || '').trim() || !Number.isInteger(ln) || ln < 1 || ln > f.lines.length) continue;
-      const raw = String(n.text).replace(/\s+/g, ' ').trim();
-      const shown = raw.length > 72 ? raw.slice(0, 72) + '…' : raw;
-      const col = model.getLineMaxColumn(ln);
-      // Monaco 0.57 renders injected after-content only for a non-empty range;
-      // a collapsed end-of-line range silently drops it.
-      decos.push({
-        range: new monaco.Range(ln, 1, ln, col),
-        options: {
-          after: {
-            content: mark + shown,
-            inlineClassName: 'nl-inline' + (n.author === 'ai' ? ' ai' : '')
-          },
-          hoverMessage: { value: raw },
-          stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
-        }
-      });
-    }
-    noteDecos.set(decos);
+    if (!editor || !model || !curFile()) return;
+    if (noteDecos) noteDecos.set([]);      // 不再画装饰
+    const n = materializeNotes();
+    if (n) { updateMeta(); emit(); }
   }
 
   function render() {
@@ -490,21 +503,18 @@
   }
   window.openNoteEditor = openNoteEditor;
 
-  /* 点击行末批注（装饰文本）就打开它的编辑框 */
-  function bindInlineNoteClick() {
-    if (!host || host.__nlClickBound) return;
-    host.__nlClickBound = true;
-    host.addEventListener('mousedown', ev => {
-      const el = ev.target && ev.target.closest && ev.target.closest('.nl-inline');
-      if (!el || !editor) return;
-      const t = editor.getTargetAtClientPoint(ev.clientX, ev.clientY);
-      const ln = t && t.position && t.position.lineNumber;
-      if (!ln || !noteMap()[ln]) return;
-      ev.preventDefault(); ev.stopPropagation();
-      openNoteEditor(ln);
-    }, true);
+  /* 新增批注 = 在行尾插入一段注释文本，光标直接落在后面，之后就是普通文本编辑 */
+  function insertInlineNote() {
+    const f = curFile(); if (!editor || !model || !f) return;
+    const ln = caretLine();
+    const mark = noteMark(f);
+    const col = model.getLineMaxColumn(ln);
+    editor.executeEdits('inline-note', [{ range: new monaco.Range(ln, col, ln, col), text: mark }]);
+    editor.setPosition({ lineNumber: ln, column: col + mark.length });
+    editor.focus();
+    updateMeta();
   }
-  bindInlineNoteClick();
+  window.insertInlineNote = insertInlineNote;
 
   /* ---------------- caret / selection / navigation ---------------- */
   function caretLine() {

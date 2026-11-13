@@ -316,8 +316,8 @@ html[data-note-mode="plain"] .slot{display:none}
 .fcard .d{font-size:12.5px;line-height:1.7;color:var(--tx2)}
 .fcard .f{border-color:var(--edge);font-size:10.5px;color:var(--muted);gap:7px}
 .fcard .lgd{background:var(--surface-soft);border:1px solid var(--edge);color:var(--muted)}
-.fcard .ed{color:var(--muted);opacity:0}
-.fcard:hover .ed,.fcard:focus-within .ed{opacity:1}
+.fcard .fact{color:var(--muted);opacity:0}
+.fcard:hover .fact,.fcard:focus-within .fact{opacity:1}
 .empty{color:var(--muted);font-size:12.5px}
 
 #toast{background:var(--surface);border:1px solid var(--edge);color:var(--ink);

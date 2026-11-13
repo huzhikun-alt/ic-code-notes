@@ -794,6 +794,13 @@ seedNote('dma_ctrl::dma_regs.pl', 6, '⚠ 这个 normalize 和 uart_log_tools �
 seedNote('uart_log_tools::check_log.pl', 5,
   '这条笔记当初写在第 5 行，后来上面插入了代码，锚点自己跟到了真正的 printf 那一行。', 11);
 
+function removeNoteAt(from){
+  snapshot('删除批注');
+  const nm=NOTES[nkey()];
+  if(nm) delete nm[from];
+  saveAll(); renderCode();
+}
+
 function buildNoteCard(no, entry){
   const note = entry.note, from = entry.from, state = entry.state;
 
@@ -818,14 +825,24 @@ function buildNoteCard(no, entry){
     });
     nb.tabIndex=0;
     t.addEventListener('dblclick',()=>selectAllIn(t));
+    /* 内容清空后再按退格直接删掉这条注释批注 */
+    t.addEventListener('keydown',ev=>{
+      if((ev.key==='Backspace'||ev.key==='Delete') && t.innerText.trim()===''){
+        ev.preventDefault(); removeNoteAt(from);
+      }
+    });
     nb.addEventListener('keydown',ev=>{
       if(document.activeElement===nb && (ev.key==='Delete'||ev.key==='Backspace')){
         ev.preventDefault();
-        snapshot('删除原注释');
-        delete NOTES[nkey()][from]; saveAll(); renderCode();
+        removeNoteAt(from);
       }
     });
-    nb.append(t);
+    /* 悬浮显示的删除按钮（原来只有 CSS 没有 DOM，导致这类批注无法删除） */
+    const cdel=document.createElement('button');
+    cdel.className='cdel'; cdel.type='button'; cdel.textContent='删除';
+    cdel.title='删除这条注释批注';
+    cdel.onclick=ev=>{ ev.stopPropagation(); removeNoteAt(from); };
+    nb.append(t, cdel);
     return nb;
   }
 
@@ -850,6 +867,12 @@ function buildNoteCard(no, entry){
 
   const tools=document.createElement('div');
   tools.className='tools';
+  /* 显式删除按钮：以前只有「卡片聚焦 + Delete 键」这一条隐蔽路径，看起来就是删不掉 */
+  const delBtn=document.createElement('button');
+  delBtn.type='button'; delBtn.className='del'; delBtn.textContent='删除';
+  delBtn.title='删除这条批注';
+  delBtn.onclick=ev=>{ ev.stopPropagation(); removeNoteAt(from); };
+  tools.appendChild(delBtn);
   h.appendChild(tools);
 
   const body=document.createElement('div');
@@ -872,6 +895,13 @@ function buildNoteCard(no, entry){
     }
   });
   nb.tabIndex=0;
+  body.addEventListener('keydown',ev=>{
+    if((ev.key==='Backspace'||ev.key==='Delete') && body.innerText.trim()===''){
+      ev.preventDefault(); removeNoteAt(from);
+    }
+    if(ev.key==='Enter'&&(ev.ctrlKey||ev.metaKey)){ ev.preventDefault(); body.blur(); }
+    if(ev.key==='Escape'){ body.blur(); }
+  });
   body.addEventListener('dblclick',()=>selectAllIn(body));
   nb.addEventListener('keydown',ev=>{
     if(document.activeElement===nb && (ev.key==='Delete'||ev.key==='Backspace')){

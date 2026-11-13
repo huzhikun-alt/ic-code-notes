@@ -190,6 +190,7 @@
     wrap = document.createElement('div');
     wrap.className = 'monaco-wrap';
     host.appendChild(wrap);
+    bindInlineNoteClick();
 
     editor = monaco.editor.create(wrap, {
       value: '', language: 'plaintext', theme: themeName(),
@@ -419,7 +420,6 @@
     if (noteEditor && noteEditor.parentNode) noteEditor.parentNode.removeChild(noteEditor);
     noteEditor = null;
   }
-
   function openNoteEditor(line) {
     const f = curFile(); if (!f || !editor) return;
     closeNoteEditor();
@@ -442,6 +442,7 @@
     setTimeout(() => { area.focus(); area.setSelectionRange(area.value.length, area.value.length); }, 10);
 
     const save = () => {
+      if (box.__deleted) return;            // 删除后不要再被 blur 的 save 复活
       const text = area.value.trim();
       const old = noteMap()[line];
       if (!text) {
@@ -465,8 +466,45 @@
       if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); save(); }
     });
     area.addEventListener('blur', () => { if (noteEditor === box) save(); });
+
+    /* 显式删除按钮：行末批注是装饰渲染的，光标删除不了，必须给一个看得见的出口 */
+    if (note) {
+      const bar = document.createElement('div');
+      bar.className = 'nl-editor-bar';
+      const hint = document.createElement('span');
+      hint.textContent = 'Ctrl+Enter 保存 · Esc 取消';
+      const del = document.createElement('button');
+      del.type = 'button'; del.className = 'nl-del'; del.textContent = '删除这条批注';
+      del.onmousedown = ev => ev.preventDefault();   // 别让 textarea 先 blur 触发 save
+      del.onclick = ev => {
+        ev.stopPropagation();
+        box.__deleted = true;
+        snapshot('删除笔记');
+        delete noteMap()[line];
+        saveAll(); updateNotes(); updateMeta(); emit();
+        closeNoteEditor();
+      };
+      bar.append(hint, del);
+      box.appendChild(bar);
+    }
   }
   window.openNoteEditor = openNoteEditor;
+
+  /* 点击行末批注（装饰文本）就打开它的编辑框 */
+  function bindInlineNoteClick() {
+    if (!host || host.__nlClickBound) return;
+    host.__nlClickBound = true;
+    host.addEventListener('mousedown', ev => {
+      const el = ev.target && ev.target.closest && ev.target.closest('.nl-inline');
+      if (!el || !editor) return;
+      const t = editor.getTargetAtClientPoint(ev.clientX, ev.clientY);
+      const ln = t && t.position && t.position.lineNumber;
+      if (!ln || !noteMap()[ln]) return;
+      ev.preventDefault(); ev.stopPropagation();
+      openNoteEditor(ln);
+    }, true);
+  }
+  bindInlineNoteClick();
 
   /* ---------------- caret / selection / navigation ---------------- */
   function caretLine() {

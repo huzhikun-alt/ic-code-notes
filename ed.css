@@ -72,13 +72,19 @@
 
 /* 笔记改为贴着代码的行内注释：右侧列隐藏 */
 .ed-main{flex:1}
-.nl-inline{color:var(--t-c,#7a8798);font-style:normal;opacity:.92}
+.nl-inline{color:var(--t-c,#7a8798);font-style:normal;opacity:.92;cursor:pointer}
+.nl-inline:hover{text-decoration:underline dotted;color:var(--accent)}
 .nl-inline.ai{color:#7c6bd6;opacity:.9}
 .nl-editor{position:absolute;z-index:20;width:min(560px,60%);}
 .nl-editor textarea{width:100%;min-height:34px;max-height:180px;resize:vertical;
   font:12.5px/1.6 var(--mono);color:var(--note-ink);background:var(--paper);
   border:1px solid var(--accent);border-radius:6px;padding:6px 8px;outline:none;
   box-shadow:0 10px 28px -16px #0b1220a0}
+.nl-editor-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin-top:5px;font-size:10.5px;color:var(--muted)}
+.nl-editor-bar .nl-del{font-size:10.5px;color:var(--rose);border:1px solid var(--edge);
+  border-radius:6px;padding:3px 8px;background:none;cursor:pointer}
+.nl-editor-bar .nl-del:hover{background:rgba(226,110,140,.12);border-color:var(--rose)}
 
 /* 结构图里的依赖箭头 */
 .mind-dep{fill:none;stroke:#7c6bd6;stroke-width:1.2;stroke-dasharray:5 4;opacity:.5}

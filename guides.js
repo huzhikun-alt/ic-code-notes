@@ -1,8 +1,8 @@
 /* ============================================================
    范围参考线 + 折叠箭头
-   - 每一级一条线，画在该级缩进边界再往左 2px
-   - 位于折叠箭头右侧，不压到代码文字：第 k 级线在列 (k-1)*unit - 2px
-   - 线按连续区间贯通，块结束即断；空行不打断
+   - 最外层：箭头右侧、代码左侧的独立窄栏。
+   - 内层：Range 实测块头首字符位置；与块尾首字母垂直对齐。
+   - 按真实块范围连接首尾之间的行，不穿过块头/块尾文字；空行不打断
    - 折叠箭头固定在行号与代码之间的窄条里，可点击折叠/展开
    - 光标所在块的范围线高亮在块的缩进左边界；折叠时用占位行代替隐藏行
    ============================================================ */
@@ -20,8 +20,6 @@
   const CHEV_RIGHT_H = 3.0;
   const CHEV_LIFT = 1.2;
   const CULL = 120;
-  /* 竖线比缩进边界再往左 2px，避免贴到 13px 小字的字形 */
-  const GUIDE_GAP = 2;
 
   let svg = null;
   let ta = null, hl = null, main = null;
@@ -777,13 +775,27 @@
     }
     const lines = view ? view.lines : f.lines;
 
-    const m = measureMetrics(f.lines);
+    const m = measureMetrics(lines);
     const unit = detectUnit(f.lines, f.lang, TAB_SIZE);
     const raw = levelsOf(lines, unit, TAB_SIZE);
-    const eff = inheritBlankLevels(raw);
-    const segs = segmentsOf(eff);
     const folds = foldLinesOf(lines, raw);
-    const active = activeRangeOf(raw, caretLine());
+    const modelRaw = levelsOf(f.lines, unit, TAB_SIZE);
+    const scopes = foldLinesOf(f.lines, modelRaw).map(start => {
+      const range = foldRangeOf(f.lines, modelRaw, start, f.lang);
+      if (!range) return null;
+      const col = visualIndent(f.lines[start], TAB_SIZE);
+      const endCode = codeOnly(f.lines[range.end], f.lang).trim();
+      const closed = visualIndent(f.lines[range.end], TAB_SIZE) <= col &&
+        (/^[}\])]/.test(endCode) || /^(end\w*|join(?:_any|_none)?)\b/.test(endCode));
+      return { ...range, col, closed };
+    }).filter(Boolean);
+    scopes.forEach(scope => {
+      scope.depth = scopes.filter(parent => parent.start < scope.start && parent.end >= scope.end).length;
+    });
+    const caretEntry = view && view.map[caretLine()];
+    const caretModel = caretEntry ? (caretEntry.ph ? caretEntry.start : caretEntry.model) : caretLine();
+    const active = scopes.filter(s => s.start <= caretModel && s.end >= caretModel)
+      .sort((a, b) => b.depth - a.depth || b.start - a.start)[0];
 
     const sx = ta.scrollLeft || 0;
     const sy = ta.scrollTop || 0;
@@ -804,32 +816,36 @@
     const out = [];
     const vTop = sy - CULL, vBot = sy + viewH + CULL;
 
-    function pushLine(level, from, to, isActive) {
-      if (to < from) return;
-      const x = snap(m.textLeft + (level - 1) * unit * m.charW - GUIDE_GAP);
+    const chunks = lineChunks();
+    for (const scope of scopes) {
+      // Hidden descendants have no visible opener; do not project their lines onto the placeholder.
+      const start = view ? view.map.findIndex(e => !e.ph && e.model === scope.start) : scope.start;
+      if (start < 0) continue;
+      const collapsed = isFoldedModel(scope.start);
+      const end = displayIndexOfModel(view, scope.end);
+      if (end < 0) continue;
+      const from = start + 1;
+      const to = scope.closed && !collapsed ? end - 1 : end;
+      if (to < from) continue;
+      let x;
+      if (scope.depth === 0) {
+        // Outer scope owns the narrow lane between the fixed chevron and column-zero text.
+        x = m.textLeft - 4 + sx;
+      } else {
+        // Inner scope: directly below the FIRST CHARACTER of its opener, not its body indent.
+        const offset = (lines[start].match(/^[ \t]*/) || [''])[0].length;
+        const range = chunks[start] && makeRange(chunks[start], offset, 1);
+        x = range ? range.getBoundingClientRect().left - main.getBoundingClientRect().left + sx
+          : m.textLeft + scope.col * m.charW;
+      }
       const y1 = m.padT + from * m.lh;
       const y2 = m.padT + (to + 1) * m.lh;
-      if (y2 < vTop || y1 > vBot) return;
-      out.push('<line x1="' + x + '" y1="' + fmt(y1) + '" x2="' + x + '" y2="' + fmt(y2) +
-        '" class="gline' + (isActive ? ' active' : '') + '" data-level="' + level +
+      if (y2 < vTop || y1 > vBot) continue;
+      const xx = snap(x);
+      out.push('<line x1="' + xx + '" y1="' + fmt(y1) + '" x2="' + xx + '" y2="' + fmt(y2) +
+        '" class="gline' + (scope === active ? ' active' : '') + '" data-level="' + (scope.depth + 1) +
+        '" data-start="' + (scope.start + 1) + '" data-end="' + (scope.end + 1) +
         '" data-from="' + (from + 1) + '" data-to="' + (to + 1) + '"/>');
-    }
-
-    for (let s = 0; s < segs.length; s++) {
-      const seg = segs[s];
-      if (!active || active.level !== seg.level) {
-        pushLine(seg.level, seg.from, seg.to, false);
-        continue;
-      }
-      const a = Math.max(seg.from, active.from);
-      const b = Math.min(seg.to, active.to);
-      if (a > b) {
-        pushLine(seg.level, seg.from, seg.to, false);
-      } else {
-        pushLine(seg.level, seg.from, a - 1, false);
-        pushLine(seg.level, a, b, true);
-        pushLine(seg.level, b + 1, seg.to, false);
-      }
     }
 
     /* 折叠箭头固定在屏幕列：加回 scrollLeft 抵消 SVG 的横向平移 */

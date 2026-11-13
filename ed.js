@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    代码编辑器（单一文本编辑面）
    textarea 负责输入与原生选择，pre 负责语法高亮，行号与笔记列同步滚动
    ============================================================ */
@@ -10,18 +10,82 @@
 
   let built = false;
   let host, ta, hl, gutter;
-  /* 折叠视图：lines 是显示行；map[i] = {model:0基模型行} 或 {ph:true, from, to, start} */
+  /* 权威投影：每个显示行都对应真实模型行，折叠提示不占文本行。 */
   let foldView = null;
+  let viewFileKey = null;
 
   const $ = s => document.querySelector(s);
   const curFile = () => (hasFile() ? files()[cur] : null);
   const noteMap = () => (NOTES[nkey()] = NOTES[nkey()] || {});
 
-  function displayLines(f) { return foldView ? foldView.lines : f.lines; }
-  function expandFolds() {
-    if (!foldView) return;
-    if (window.__ED_FOLDS__ && window.__ED_FOLDS__.expandAll) window.__ED_FOLDS__.expandAll();
-    else { foldView = null; render(); }
+  function project(f) {
+    const folding = window.EditorFolding;
+    if (folding) folding.beforeRender(f);
+    foldView = folding ? folding.project(f) : {
+      lines: f.lines.slice(), map: f.lines.map((_, model) => ({ model })),
+      collapsedByStart: new Map()
+    };
+    viewFileKey = nkey();
+    return foldView;
+  }
+
+  function lineStarts(lines) {
+    let offset = 0;
+    return lines.map(line => { const start = offset; offset += line.length + 1; return start; });
+  }
+
+  function viewToModel(pos, view, f) {
+    const starts = lineStarts(view.lines);
+    let row = 0;
+    while (row + 1 < starts.length && starts[row + 1] <= pos) row++;
+    const entry = view.map[row];
+    if (!entry) return 0;
+    const model = Math.max(0, Math.min(f.lines.length - 1, entry.model));
+    return lineStarts(f.lines)[model] + Math.min(f.lines[model].length, Math.max(0, pos - starts[row]));
+  }
+
+  function modelToView(pos, view, f) {
+    const starts = lineStarts(f.lines), visible = lineStarts(view.lines);
+    pos = Math.max(0, Math.min(f.lines.join('\n').length, Number(pos) || 0));
+    let model = 0;
+    while (model + 1 < starts.length && starts[model + 1] <= pos) model++;
+    let row = view.map.findIndex(entry => entry.model === model);
+    if (row >= 0) return visible[row] + Math.min(f.lines[model].length, pos - starts[model]);
+    // 隐藏位置落在最近可见的折叠头行末尾，不自动展开。
+    row = 0;
+    for (let i = 0; i < view.map.length && view.map[i].model < model; i++) row = i;
+    return visible[row] + view.lines[row].length;
+  }
+
+  function getModelSelection() {
+    const f = curFile();
+    if (!f || !ta) return { start: 0, end: 0, direction: 'none' };
+    const view = foldView || project(f);
+    const all = ta.selectionStart === 0 && ta.selectionEnd === ta.value.length && ta.selectionStart !== ta.selectionEnd;
+    return { start: viewToModel(ta.selectionStart, view, f),
+      end: all ? f.lines.join('\n').length : viewToModel(ta.selectionEnd, view, f), direction: ta.selectionDirection || 'none' };
+  }
+
+  function setModelSelection(start, end, direction) {
+    const f = curFile(); if (!f || !ta) return;
+    const view = foldView || project(f);
+    ta.setSelectionRange(modelToView(start, view, f), modelToView(end, view, f), direction || 'none');
+    paintCaretInfo();
+  }
+
+  function onClipboard(ev) {
+    const f = curFile(); if (!f || !ev.clipboardData || ta.selectionStart === ta.selectionEnd) return;
+    const selection = getModelSelection();
+    ev.preventDefault();
+    ev.clipboardData.setData('text/plain', f.lines.join('\n').slice(selection.start, selection.end));
+    if (ev.type === 'cut') {
+      if(window.EditorFolding){
+        const source=f.lines.join('\n');
+        const identity={lines:f.lines.slice(),map:f.lines.map((_,model)=>({model}))};
+        EditorFolding.applyViewEdit(source,source.slice(0,selection.start)+source.slice(selection.end),identity,f);
+        render();setModelSelection(selection.start,selection.start);saveAll();
+      }else{ta.setRangeText('', ta.selectionStart, ta.selectionEnd, 'start');onInput();}
+    }
   }
 
   /* ---------------- 构建 ---------------- */
@@ -49,6 +113,8 @@
     gutter = $('#edGutter');
 
     ta.addEventListener('input', onInput);
+    ta.addEventListener('copy', onClipboard);
+    ta.addEventListener('cut', onClipboard);
     ta.addEventListener('scroll', syncScroll);
     ta.addEventListener('keydown', onKey);
     ta.addEventListener('click', () => { paintCaretInfo(); });
@@ -117,22 +183,17 @@
     }
     build();
 
-    /* 文件切换 / 模型被撤销改动时，折叠视图失效 */
-    if (foldView) {
-      let ok = foldView.fileKey === nkey() && foldView.map && foldView.lines &&
-        foldView.lines.length === foldView.map.length &&
-        foldView.map.every((e, i) => e.ph || (f.lines[e.model] === foldView.lines[i]));
-      if (!ok) foldView = null;
-    }
-
-    const text = displayLines(f).join('\n');
+    const selection = foldView && viewFileKey === nkey() ? getModelSelection() : null;
+    const view = project(f);
+    const text = view.lines.join('\n');
     if (ta.value !== text) {
       const st = ta.scrollTop, sl = ta.scrollLeft;
       ta.value = text;
       ta.scrollTop = st; ta.scrollLeft = sl;
     }
-    ta.readOnly = !!foldView;
-    ta.classList.toggle('folded', !!foldView);
+    ta.readOnly = false;
+    ta.classList.toggle('folded', !!view.collapsedByStart.size);
+    if (selection) setModelSelection(selection.start, selection.end, selection.direction);
     resolveAnchors(f);
     paintAll(); paintCaretInfo();
 
@@ -147,8 +208,10 @@
 
   const afterHooks = [];
   function paintAll() {
+    if (window.EditorViewLayout) EditorViewLayout.apply();
     paintHighlight();
     paintGutter();
+    if (window.EditorViewLayout) { EditorViewLayout.draw(foldView); positionDecorations(); }
     syncScroll();
     afterHooks.forEach(fn => { try { fn(); } catch (e) {} });
   }
@@ -165,9 +228,7 @@
     for (let i = 0; i < lines.length; i++) {
       const entry = view ? view.map[i] : null;
       let html = '';
-      if (entry && entry.ph) {
-        html = '<span class="fold-ph">' + esc(lines[i]) + '</span>';
-      } else {
+      {
         const line = lines[i];
         if (line) {
           tokenize(line, f.lang).forEach(tk => {
@@ -179,12 +240,17 @@
         } else {
           html = ' ';
         }
+        if (entry && view.collapsedByStart.has(entry.model)) {
+          if(window.EditorFolding && EditorFolding.options.foldingHighlight)
+            html += '<span class="fold-background" data-row="' + i + '"></span>';
+          html += '<span class="fold-placeholder" data-row="' + i + '" data-model="' + entry.model + '">⋯</span>';
+        }
         const modelLine = entry ? entry.model + 1 : i + 1;
         const n = nm[modelLine];
         if (n && String(n.text || '').trim()) {
           const raw = String(n.text).replace(/\s+/g, ' ').trim();
           const shown = raw.length > 72 ? raw.slice(0, 72) + '…' : raw;
-          html += '<span class="nl-inline' + (n.author === 'ai' ? ' ai' : '') + '">' +
+          html += '<span data-row="' + i + '" class="nl-inline' + (n.author === 'ai' ? ' ai' : '') + '">' +
             esc(mark + shown) + '</span>';
         }
       }
@@ -193,14 +259,31 @@
     hl.innerHTML = out.join('\n') + '\n';
   }
 
+  function positionDecorations() {
+    if (!window.EditorViewLayout || !foldView) return;
+    for(const el of hl.querySelectorAll('.fold-background')){
+      const row=+el.dataset.row,layout=EditorViewLayout.get();
+      el.style.cssText='position:absolute;left:0;right:0;top:'+layout.rows[row].top+'px;height:'+layout.rows[row].height+'px;';
+    }
+    for (const el of hl.querySelectorAll('.nl-inline,.fold-placeholder')) {
+      const row = +el.dataset.row;
+      const point = EditorViewLayout.positionAt(row, foldView.lines[row].length);
+      if (!point) continue;
+      el.style.position = 'absolute'; el.style.whiteSpace = 'pre';
+      el.style.left = point.left + 'px'; el.style.top = point.top + 'px';
+    }
+  }
+  window.addEventListener('resize', () => requestAnimationFrame(() => {
+    if (window.EditorViewLayout && foldView) { EditorViewLayout.draw(foldView); positionDecorations(); }
+  }));
+
   function paintGutter() {
     const f = curFile(); if (!f) return;
     const view = foldView;
     const lines = view ? view.lines : f.lines;
     let s = '';
     for (let i = 0; i < lines.length; i++) {
-      if (view && view.map[i] && view.map[i].ph) s += '⋮';
-      else s += (view ? view.map[i].model + 1 : i + 1);
+      s += (view ? view.map[i].model + 1 : i + 1);
       s += '\n';
     }
     gutter.textContent = s;
@@ -209,10 +292,27 @@
   /* ---------------- 编辑 ---------------- */
   function onInput() {
     const f = curFile(); if (!f) return;
-    if (foldView) return;   // 折叠视图只读；输入前会先展开
     const old = f.lines.slice();
-    const lines = ta.value.split('\n');
-    f.lines = lines.length ? lines : [''];
+    Object.keys(noteMap()).forEach(key => {
+      const note = noteMap()[key];
+      if (!note || typeof note !== 'object') return;
+      const source = old[Number(key) - 1] || '';
+      if (note.fp == null) note.fp = hashLine(source);
+      if (note.anchorText == null) note.anchorText = source;
+    });
+    const oldView = foldView || { lines: old.slice(), map: old.map((_, model) => ({ model })), collapsedByStart: new Map() };
+    const newText = ta.value;
+    const caretStart = ta.selectionStart, caretEnd = ta.selectionEnd, direction = ta.selectionDirection;
+    if (window.EditorFolding) window.EditorFolding.applyViewEdit(oldView.lines.join('\n'), newText, oldView, f);
+    else f.lines = newText.split('\n');
+    // 输入后重算投影；textarea 和编辑器节点保持不变。
+    // applyViewEdit 后的光标按变更后显示行定位。
+    const view = project(f);
+    const text = view.lines.join('\n');
+    if (ta.value !== text) ta.value = text;
+    ta.setSelectionRange(Math.min(caretStart, text.length), Math.min(caretEnd, text.length), direction || 'none');
+    ta.readOnly = false;
+    ta.classList.toggle('folded', !!view.collapsedByStart.size);
 
     /* 只有“行数没变”的原地改写才更新指纹；
        插入/删除整行时交给指纹匹配去迁移，直接改指纹会把锚点冲掉 */
@@ -227,9 +327,10 @@
 
     saveAll();
     resolveAnchors(f);
-    paintHighlight();
-    paintGutter();
+    paintAll();
     paintCaretInfo();
+    const meta = document.getElementById('fmeta');
+    if (meta) meta.textContent = f.lines.length + ' 行 · ' + Object.keys(noteMap()).length + ' 条笔记';
   }
 
   function onKey(ev) {
@@ -239,7 +340,16 @@
       ev.preventDefault();
       const unit = (typeof detectIndentUnit === 'function')
         ? detectIndentUnit(f.lines, f.lang) : 2;
-      insert(' '.repeat(unit), ev.shiftKey);
+      const selection=getModelSelection(), source=f.lines.join('\n');
+      const first=source.slice(0,selection.start).split('\n').length-1;
+      const last=source.slice(0,selection.end>selection.start && source[selection.end-1]==='\n'?selection.end-1:selection.end).split('\n').length-1;
+      if(selection.start!==selection.end && first!==last && window.EditorFolding){
+        const next=f.lines.slice();
+        for(let i=first;i<=last;i++) next[i]=ev.shiftKey?next[i].replace(new RegExp('^ {1,'+unit+'}'),''):' '.repeat(unit)+next[i];
+        const identity={lines:f.lines.slice(),map:f.lines.map((_,model)=>({model}))};
+        EditorFolding.applyViewEdit(source,next.join('\n'),identity,f);render();saveAll();
+        const ss=lineStarts(f.lines);setModelSelection(ss[first],ss[last]+f.lines[last].length,selection.direction);
+      }else insert(' '.repeat(unit), ev.shiftKey);
       return;
     }
 
@@ -373,7 +483,8 @@
   }
   function openNoteEditor(line) {
     const f = curFile(); if (!f) return;
-    if (foldView) expandFolds();
+    if (window.EditorFolding) window.EditorFolding.reveal(line - 1);
+    render();
     closeNoteEditor();
     const note = noteMap()[line];
     const box = document.createElement('div');
@@ -385,7 +496,8 @@
     box.appendChild(area);
     host.querySelector('.ed-main').appendChild(box);
 
-    const top = PAD_T + (line - 1) * LH - ta.scrollTop;
+    const row = foldView.map.findIndex(entry => entry.model === line - 1);
+    const top = (window.EditorViewLayout ? EditorViewLayout.lineTop(Math.max(0,row)) : PAD_T + Math.max(0,row)*LH) - ta.scrollTop;
     box.style.top = Math.max(4, top) + 'px';
     box.style.left = '24px';
     nlEditor = box;
@@ -424,21 +536,22 @@
     const dl = ta.value.slice(0, pos).split('\n').length;   // 显示行，1 基
     if (foldView && foldView.map[dl - 1]) {
       const e = foldView.map[dl - 1];
-      return (e.ph ? e.from : e.model) + 1;
+      return e.model + 1;
     }
     return dl;
   }
 
   /* 跳到某一行并把光标放过去 */
   function gotoLine(line) {
-    if (!ta) return;
-    if (foldView) expandFolds();
-    const lines = ta.value.split('\n');
-    let pos = 0;
-    for (let i = 0; i < line - 1 && i < lines.length; i++) pos += lines[i].length + 1;
+    const f = curFile(); if (!f) return;
+    line = Math.max(1, Math.min(f.lines.length, Number(line) || 1));
+    if (window.EditorFolding) window.EditorFolding.reveal(line - 1);
+    render();
+    const row = Math.max(0, foldView.map.findIndex(entry => entry.model === line - 1));
+    const pos = lineStarts(foldView.lines)[row];
     ta.focus();
     ta.setSelectionRange(pos, pos);
-    ta.scrollTop = Math.max(0, (line - 1) * LH - 120);
+    ta.scrollTop = Math.max(0, (window.EditorViewLayout ? EditorViewLayout.lineTop(row) : row*LH) - 120);
     syncScroll();
     paintCaretInfo();
   }
@@ -449,7 +562,7 @@
     const mlOf = dl => {
       if (foldView && foldView.map[dl - 1]) {
         const e = foldView.map[dl - 1];
-        return (e.ph ? e.from : e.model) + 1;
+        return e.model + 1;
       }
       return dl;
     };
@@ -459,24 +572,21 @@
     }
     const from = mlOf(dlOf(ta.selectionStart));
     const to = mlOf(dlOf(ta.selectionEnd));
-    return { from, to, text: ta.value.slice(ta.selectionStart, ta.selectionEnd) };
+    const selection = getModelSelection();
+    return { from, to, text: curFile().lines.join('\n').slice(selection.start, selection.end) };
   }
 
   /* ---------------- 挂到全局 ---------------- */
   window.ED = {
     afterRender(fn) { afterHooks.push(fn); },
-    render, addNote, putNote, noteAt, removeNote, caretLine, gotoLine, selectedLines,
-    setFoldView(view) {
-      if (!curFile()) { foldView = null; return; }
-      foldView = view ? {
-        fileKey: nkey(),
-        lines: view.lines.slice(),
-        map: view.map
-      } : null;
-      render();
+    render, refreshView: render, addNote, putNote, noteAt, removeNote, caretLine, gotoLine, selectedLines,
+    getModelSelection, setModelSelection,
+    getFoldView() {
+      const f = curFile();
+      if (!f) return { lines: [], map: [], collapsedByStart: new Map() };
+      return foldView && viewFileKey === nkey() ? foldView : project(f);
     },
-    getFoldView() { return foldView; },
-    isFolded() { return !!foldView; },
+    isFolded() { return !!(foldView && foldView.collapsedByStart.size); },
     focusBody(line) {
       if (typeof openNoteEditor === 'function') openNoteEditor(line);
     }

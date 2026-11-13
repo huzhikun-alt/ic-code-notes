@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN" data-theme="light" data-note-mode="inline" data-preset="paper">
 <head>
 <meta charset="utf-8">
@@ -356,7 +356,8 @@
 <link rel="stylesheet" href="ui-refresh.css?v=20261107c">
 <link rel="stylesheet" href="presets.css?v=20261107c">
 <link rel="stylesheet" href="ai.css?v=20261107c">
-<link rel="stylesheet" href="ed.css?v=20261107-1130">
+<link rel="stylesheet" href="vendor/monaco/vs/editor/editor.main.css">
+<link rel="stylesheet" href="ed.css?v=monaco-3">
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><defs><symbol id="i-sparkles" viewBox="0 0 24 24">
@@ -538,7 +539,7 @@
     <div class="sep"></div>
     <button role="menuitem" id="btnReset" class="dang"><svg class="ic"><use href="#i-rotate-ccw"/></svg>重置数据</button>
     <div class="sep"></div>
-    <div class="ver" id="buildVer">构建 20261107-1130</div>
+    <div class="ver" id="buildVer">构建 20261107-vscode-core</div>
   </div>
 </div>
 
@@ -2708,7 +2709,7 @@ renderProj(); renderNav(); renderCode(); renderLib();
 <script src="ai.js?v=20261107c"></script>
 <script src="graph.js?v=20261107c"></script>
 <script src="mindmap.js?v=20261106c"></script>
-<script src="ed.js?v=20261107-1130"></script>
-<script src="guides.js?v=20261107-1130"></script>
+<script src="vendor/monaco/vs/loader.js"></script>
+<script src="ed-monaco.js?v=monaco-3"></script>
 </body>
 </html>

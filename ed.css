@@ -1,12 +1,15 @@
-﻿/* ============================================================
+/* ============================================================
    代码编辑面 + 笔记列
    ============================================================ */
 .ed-host{position:absolute;left:0;right:0;top:56px;bottom:0;overflow:hidden}
 .ed{display:flex;height:100%;background:var(--paper)}
 
 /* 行号 */
-.ed-gutter{width:54px;flex:none;overflow:hidden;border-right:1px solid var(--edge);
+.ed-gutter{width:54px;flex:none;overflow:hidden;border-right:0;
   background:var(--paper);position:relative;z-index:2}
+/* The separator belongs BETWEEN line numbers and folding controls, not beside code. */
+.ed-gutter::after{content:"";position:absolute;top:0;bottom:0;
+  right:var(--fold-lane-width,38px);width:1px;background:var(--edge);pointer-events:none}
 .ed-gutter-in{padding:16px 10px 60px 0;text-align:right;
   font:11px/22px var(--mono);color:var(--muted);white-space:pre;will-change:transform}
 
@@ -82,16 +85,36 @@
 .mind-dep:hover{opacity:.9}
 .mind-tip .mt-hint{margin-top:6px;font-size:10.5px;color:var(--muted);border-top:1px dashed var(--edge);padding-top:5px}
 
-/* 缩进参考线（每级一条；颜色随主题，不用 opacity 压淡） */
-.ed-guides{position:absolute;left:0;top:0;pointer-events:none;z-index:1;overflow:visible}
-.ed-guides .gline{stroke:color-mix(in srgb,var(--ink) 18%,var(--paper));stroke-width:1;
-  shape-rendering:crispEdges}
-.ed-guides .gline.active{stroke:color-mix(in srgb,var(--ink) 55%,var(--paper))}
-.ed-guides .fold{fill:none;stroke:color-mix(in srgb,var(--ink) 55%,var(--paper));
-  stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round}
-/* 折叠后的占位行 / 只读状态 */
-.ed-hl .fold-ph{color:var(--muted);font-style:italic}
-.ed-input.folded{caret-color:var(--muted)}
+/* Pinned VS Code folding controls; scope guides are a separate renderer. */
+@font-face{font-family:codicon;src:url('assets/codicon.ttf') format('truetype');font-display:block}
+.ed{--vscode-editorGutter-foldingControlForeground:var(--muted);
+  --vscode-editor-foldPlaceholderForeground:#808080;
+  --indent-guide-color:color-mix(in srgb,var(--ink) 18%,var(--paper));
+  --indent-guide-active-color:color-mix(in srgb,var(--ink) 55%,var(--paper));
+  --bracket-guide-color:var(--indent-guide-color);--bracket-guide-active-color:var(--indent-guide-active-color)}
+.ed-gutter-in{padding-right:5px;width:calc(100% - var(--fold-lane-width,38px))}
+.fold-controls{position:absolute;right:0;top:0;bottom:0;overflow:hidden}
+.fold-control{position:absolute;left:0;right:0;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.fold-codicon{font-family:codicon!important;font-style:normal;font-weight:normal;font-size:140%;margin-left:2px;
+  color:var(--vscode-editorGutter-foldingControlForeground);opacity:0;transition:opacity .5s;pointer-events:none}
+.fold-hover .fold-codicon,.fold-control.collapsed .fold-codicon,.ed[data-fold-controls="always"] .fold-codicon{opacity:1}
+@media(prefers-reduced-motion:reduce){.fold-codicon{transition:none}}
+.fold-placeholder{color:var(--vscode-editor-foldPlaceholderForeground);margin:.1em .2em 0;line-height:1em;cursor:pointer}
+.fold-background{background:var(--vscode-editor-foldBackground,color-mix(in srgb,var(--accent) 9%,transparent));pointer-events:none;z-index:-1}
+/* Above the opaque gutter (z=2); pointer-events:none preserves all text/gutter interaction. */
+.ed-guide-layer{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:3}
+
+/* Monaco host */
+.monaco-code-host{position:absolute;left:0;right:0;top:56px;bottom:0;padding:0!important;
+  overflow:hidden;background:var(--paper)}
+.monaco-wrap{position:absolute;inset:0}
+/* Native Monaco gutter: no custom full-height divider between numbers and folding lane. */
+/* Move native indentation guides from the cell's left edge to its character center. */
+.monaco-code-host .monaco-editor .core-guide-indent.vertical{
+  transform: translateX(calc(var(--monaco-space-width, 7.1484375px) / 2));
+}
+.monaco-code-host .nl-editor{z-index:60}
+.monaco-code-host .ed-fnbar{z-index:55}
 
 /* 旧控件隐藏（回归修复） */
 #noteMode,#splitter,#btnRawEdit,#raw,.editbar{display:none!important}

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>代码窗口（模拟）· 与关系图分窗联动</title>
+<style>
+  :root{--bg:#0f1115;--panel:#151922;--card:#1a1f2b;--line:#2a3140;--line3:#3a4356;
+        --text:#e6e9ef;--dim:#9aa3b2;--accent:#5aa9ff}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
+    font:13px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  #wrap{display:grid;grid-template-columns:260px 1fr;height:100%}
+  aside{border-right:1px solid var(--line);background:var(--panel);overflow:auto;padding:10px}
+  aside h2{font-size:12px;color:var(--dim);font-weight:500;margin:4px 0 10px;letter-spacing:.04em}
+  .file{padding:6px 8px;border-radius:6px;cursor:pointer;font-family:ui-monospace,Consolas,monospace;
+        font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .file:hover{background:var(--card);color:var(--text)}
+  .file.on{background:var(--card);color:var(--text);box-shadow:inset 2px 0 0 var(--accent)}
+  .file.jumped{outline:1px solid var(--accent)}
+  main{padding:16px 20px;overflow:auto}
+  .top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .path{color:var(--dim);font-family:ui-monospace,Consolas,monospace;font-size:12px}
+  .spacer{flex:1}
+  button{background:transparent;border:1px solid var(--line3);color:var(--text);border-radius:8px;
+         padding:6px 12px;font-size:12px;cursor:pointer}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  pre{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;
+      overflow:auto;font:12px/1.65 ui-monospace,Consolas,monospace;margin:0}
+  .hint{color:var(--dim);font-size:12px;margin-top:10px}
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--card);
+    border:1px solid var(--line3);border-radius:8px;padding:8px 12px;font-size:12px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <aside>
+    <h2>工程文件</h2>
+    <div id="files"></div>
+  </aside>
+  <main>
+    <div class="top">
+      <span class="path" id="path">—</span>
+      <span class="spacer"></span>
+      <button id="openGraph">打开关系图（独立窗口）</button>
+    </div>
+    <pre id="code">左侧选一个文件。</pre>
+    <div class="hint">这个页面模拟「代码阅读窗口」。关系图在另一个窗口里打开，两窗口通过 postMessage 联动：
+      在关系图里双击节点 → 这里自动切到那个文件；在这里选文件 → 关系图聚焦到它。</div>
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var FILES = [
+    { path: "uart_log_tools/check_log.pl", code:
+`#!/usr/bin/perl
+use strict;
+use warnings;
+require "./uart_rx.pl";
+require "./missing_helper.pl";
+
+sub main {
+  my $line = shift;
+  my $frame = uart_parse_frame($line);
+  print "frame=$frame\\n";
+}` },
+    { path: "uart_log_tools/uart_rx.pl", code:
+`package uart_rx;
+use strict;
+use Exporter 'import';
+our @EXPORT_OK = qw(uart_parse_frame uart_crc);
+
+sub uart_parse_frame {
+  my ($line) = @_;
+  my ($ts, $payload) = split /:/, $line, 2;
+  return { ts => $ts, payload => $payload, crc => uart_crc($payload) };
+}` },
+    { path: "rtl/tb_top.sv", code:
+"\u0060include \"defs.svh\"\n\nmodule tb_top;\n  logic clk;\n  sat_alu u_alu (.clk(clk), .a(a), .b(b), .y(y));\nendmodule" },
+    { path: "rtl/sat_alu.sv", code:
+"\u0060include \"defs.svh\"\n\u0060include \"missing_localparams.svh\"\n\nmodule sat_alu (\n  input logic clk,\n  output logic [31:0] y\n);\nendmodule" },
+    { path: "rtl/defs.svh", code:
+"\u0060ifndef DEFS_SVH\n\u0060define DEFS_SVH\n\u0060define DATA_W 32\n\u0060endif" },
+    { path: "tools/parse_report.py", code:
+`import os
+import json
+from utils import normalize
+import missing_module` },
+    { path: "tools/utils.py", code:
+`def normalize(value):
+    if isinstance(value, dict):
+        return {k: normalize(v) for k, v in value.items()}
+    return value` }
+  ];
+
+  var graphWin = null;
+  var current = null;
+
+  var listEl = document.getElementById("files");
+  var pathEl = document.getElementById("path");
+  var codeEl = document.getElementById("code");
+
+  function render() {
+    listEl.innerHTML = "";
+    FILES.forEach(function (f) {
+      var d = document.createElement("div");
+      d.className = "file" + (current && current.path === f.path ? " on" : "");
+      d.textContent = f.path;
+      d.title = f.path;
+      d.onclick = function () { select(f, true); };
+      listEl.appendChild(d);
+    });
+  }
+
+  function select(f, notifyGraph) {
+    current = f;
+    pathEl.textContent = f.path;
+    codeEl.textContent = f.code;
+    render();
+    if (notifyGraph && graphWin && !graphWin.closed) {
+      try { graphWin.postMessage({ type: "icn:focus", file: f.path }, "*"); } catch (e) {}
+    }
+  }
+
+  document.getElementById("openGraph").onclick = function () {
+    var url = "graph.html" + (current ? "?file=" + encodeURIComponent(current.path) : "");
+    graphWin = window.open(url, "icn-graph", "width=1280,height=860");
+    if (!graphWin) toast("浏览器拦了弹窗，请允许本页打开新窗口");
+  };
+
+  window.addEventListener("message", function (ev) {
+    var data = ev.data;
+    if (!data || data.type !== "icn:open-file" || !data.file) return;
+    var hit = FILES.filter(function (f) { return f.path === data.file; })[0];
+    if (hit) {
+      select(hit, false);
+      toast("关系图跳转：" + data.file);
+      var idx = FILES.indexOf(hit);
+      var el = listEl.children[idx];
+      if (el) { el.classList.add("jumped"); setTimeout(function () { el.classList.remove("jumped"); }, 1600); }
+    } else {
+      toast("关系图跳转：" + data.file + "（示例工程里没有这个文件）");
+    }
+  });
+
+  var toastEl = null;
+  function toast(text) {
+    if (toastEl) toastEl.remove();
+    toastEl = document.createElement("div");
+    toastEl.className = "toast";
+    toastEl.textContent = text;
+    document.body.appendChild(toastEl);
+    setTimeout(function () { if (toastEl) { toastEl.remove(); toastEl = null; } }, 2400);
+  }
+
+  select(FILES[0], false);
+})();
+</script>
+</body>
+</html>

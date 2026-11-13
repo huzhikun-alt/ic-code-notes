@@ -1,0 +1,248 @@
+{
+  "project": "sample-ic-project",
+  "root": "D:/Desktop/AI+/aihtml/ic-code-notes/graph-demo/sample-ic-project",
+  "scannedAt": "2026-11-13T15:28:02",
+  "nodes": [
+    {
+      "id": "rtl/defs.svh",
+      "name": "defs.svh",
+      "dir": "rtl",
+      "lang": "verilog",
+      "lines": 6,
+      "out": 0,
+      "in": 2
+    },
+    {
+      "id": "rtl/sat_alu.sv",
+      "name": "sat_alu.sv",
+      "dir": "rtl",
+      "lang": "verilog",
+      "lines": 14,
+      "out": 2,
+      "in": 1
+    },
+    {
+      "id": "rtl/tb_top.sv",
+      "name": "tb_top.sv",
+      "dir": "rtl",
+      "lang": "verilog",
+      "lines": 13,
+      "out": 2,
+      "in": 0
+    },
+    {
+      "id": "tools/parse_report.py",
+      "name": "parse_report.py",
+      "dir": "tools",
+      "lang": "python",
+      "lines": 10,
+      "out": 4,
+      "in": 0
+    },
+    {
+      "id": "tools/utils.py",
+      "name": "utils.py",
+      "dir": "tools",
+      "lang": "python",
+      "lines": 7,
+      "out": 0,
+      "in": 1
+    },
+    {
+      "id": "uart_log_tools/check_log.pl",
+      "name": "check_log.pl",
+      "dir": "uart_log_tools",
+      "lang": "perl",
+      "lines": 14,
+      "out": 4,
+      "in": 0
+    },
+    {
+      "id": "uart_log_tools/uart_rx.pl",
+      "name": "uart_rx.pl",
+      "dir": "uart_log_tools",
+      "lang": "perl",
+      "lines": 14,
+      "out": 2,
+      "in": 1
+    }
+  ],
+  "edges": [
+    {
+      "from": "rtl/sat_alu.sv",
+      "to": "missing_localparams.svh",
+      "kind": "include",
+      "line": 2,
+      "raw": "missing_localparams.svh",
+      "status": "missing",
+      "count": 1,
+      "lines": [
+        2
+      ]
+    },
+    {
+      "from": "rtl/sat_alu.sv",
+      "to": "rtl/defs.svh",
+      "kind": "include",
+      "line": 1,
+      "raw": "defs.svh",
+      "status": "resolved",
+      "count": 1,
+      "lines": [
+        1
+      ]
+    },
+    {
+      "from": "rtl/tb_top.sv",
+      "to": "rtl/defs.svh",
+      "kind": "include",
+      "line": 1,
+      "raw": "defs.svh",
+      "status": "resolved",
+      "count": 1,
+      "lines": [
+        1
+      ]
+    },
+    {
+      "from": "rtl/tb_top.sv",
+      "to": "rtl/sat_alu.sv",
+      "kind": "instantiate",
+      "line": 7,
+      "raw": "sat_alu",
+      "status": "resolved",
+      "count": 1,
+      "lines": [
+        7
+      ]
+    },
+    {
+      "from": "tools/parse_report.py",
+      "to": "json",
+      "kind": "import",
+      "line": 2,
+      "raw": "json",
+      "status": "external",
+      "count": 1,
+      "lines": [
+        2
+      ]
+    },
+    {
+      "from": "tools/parse_report.py",
+      "to": "missing_module",
+      "kind": "import",
+      "line": 4,
+      "raw": "missing_module",
+      "status": "missing",
+      "count": 1,
+      "lines": [
+        4
+      ]
+    },
+    {
+      "from": "tools/parse_report.py",
+      "to": "os",
+      "kind": "import",
+      "line": 1,
+      "raw": "os",
+      "status": "external",
+      "count": 1,
+      "lines": [
+        1
+      ]
+    },
+    {
+      "from": "tools/parse_report.py",
+      "to": "tools/utils.py",
+      "kind": "import",
+      "line": 3,
+      "raw": "utils",
+      "status": "resolved",
+      "count": 1,
+      "lines": [
+        3
+      ]
+    },
+    {
+      "from": "uart_log_tools/check_log.pl",
+      "to": "./missing_helper.pl",
+      "kind": "require",
+      "line": 5,
+      "raw": "./missing_helper.pl",
+      "status": "missing",
+      "count": 1,
+      "lines": [
+        5
+      ]
+    },
+    {
+      "from": "uart_log_tools/check_log.pl",
+      "to": "strict",
+      "kind": "require",
+      "line": 2,
+      "raw": "strict",
+      "status": "external",
+      "count": 1,
+      "lines": [
+        2
+      ]
+    },
+    {
+      "from": "uart_log_tools/check_log.pl",
+      "to": "uart_log_tools/uart_rx.pl",
+      "kind": "require",
+      "line": 4,
+      "raw": "./uart_rx.pl",
+      "status": "resolved",
+      "count": 1,
+      "lines": [
+        4
+      ]
+    },
+    {
+      "from": "uart_log_tools/check_log.pl",
+      "to": "warnings",
+      "kind": "require",
+      "line": 3,
+      "raw": "warnings",
+      "status": "external",
+      "count": 1,
+      "lines": [
+        3
+      ]
+    },
+    {
+      "from": "uart_log_tools/uart_rx.pl",
+      "to": "Exporter",
+      "kind": "require",
+      "line": 3,
+      "raw": "Exporter",
+      "status": "external",
+      "count": 1,
+      "lines": [
+        3
+      ]
+    },
+    {
+      "from": "uart_log_tools/uart_rx.pl",
+      "to": "strict",
+      "kind": "require",
+      "line": 2,
+      "raw": "strict",
+      "status": "external",
+      "count": 1,
+      "lines": [
+        2
+      ]
+    }
+  ],
+  "stats": {
+    "files": 7,
+    "edges": 14,
+    "resolved": 5,
+    "missing": 3,
+    "external": 6,
+    "modules": 2
+  }
+}

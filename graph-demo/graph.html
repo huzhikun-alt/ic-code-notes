@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文件关系图 · IC 代码笔记</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#151922; --card:#1a1f2b; --line:#2a3140; --line3:#3a4356;
+    --text:#e6e9ef; --dim:#9aa3b2; --accent:#5aa9ff; --warn:#ff5c8a;
+    --perl:#5aa9ff; --python:#f5c451; --verilog:#b48ef0; --other:#7f8a9c;
+    --grid:#20242e;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg); color:var(--text); overflow:hidden;
+    font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  #app{display:grid;grid-template-rows:auto 1fr;height:100%}
+
+  /* 工具条 */
+  .bar{
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+    padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel);
+  }
+  .bar .title{font-weight:600;margin-right:6px}
+  .bar .meta{color:var(--dim);font-size:12px}
+  .seg{display:flex;border:1px solid var(--line3);border-radius:8px;overflow:hidden}
+  .seg button{
+    background:transparent;color:var(--dim);border:0;padding:5px 10px;font-size:12px;cursor:pointer;
+  }
+  .seg button+button{border-left:1px solid var(--line3)}
+  .seg button.on{background:var(--card);color:var(--text)}
+  .bar label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);cursor:pointer}
+  .bar input[type=range]{width:80px}
+  .spacer{flex:1}
+
+  /* 画布 */
+  .stage{position:relative;overflow:hidden;
+    background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:24px 24px}
+  svg{display:block;width:100%;height:100%;cursor:grab}
+  svg.dragging{cursor:grabbing}
+  .edge{fill:none;stroke:var(--line3);stroke-width:1.5}
+  .edge.missing{stroke:var(--warn);stroke-dasharray:5 4}
+  .edge.external{stroke:#5b6478;stroke-dasharray:2 4}
+  .edge.dim{opacity:.12}
+  .edge.hot{stroke:var(--accent)}
+  .node{cursor:pointer}
+  .node rect{fill:var(--card);stroke:var(--line3);stroke-width:1;rx:8}
+  .node.hot rect{stroke:var(--accent);stroke-width:2}
+  .node.dim{opacity:.15}
+  .node .name{fill:var(--text);font:12px/1 ui-monospace,SFMono-Regular,Consolas,monospace}
+  .node .sub{fill:var(--dim);font:10px/1 ui-monospace,Consolas,monospace}
+  .node .dot{stroke:none}
+
+  /* 侧栏 */
+  .panel{
+    position:absolute;top:0;right:0;bottom:0;width:320px;transform:translateX(100%);
+    transition:transform .18s ease;background:var(--panel);border-left:1px solid var(--line);
+    padding:14px;overflow:auto;
+  }
+  .panel.open{transform:none}
+  .panel h3{margin:0 0 4px;font-size:13px;word-break:break-all}
+  .panel .path{color:var(--dim);font-size:11px;word-break:break-all;margin-bottom:10px}
+  .panel .sect{margin:14px 0 6px;font-size:11px;color:var(--dim);letter-spacing:.04em}
+  .panel ul{list-style:none;margin:0;padding:0}
+  .panel li{padding:6px 0;border-top:1px solid var(--line);font-size:12px}
+  .panel li:first-child{border-top:0}
+  .panel .k{display:inline-block;padding:1px 5px;margin-right:6px;border:1px solid var(--line3);
+    border-radius:4px;font-size:10px;color:var(--dim)}
+  .panel .miss{color:var(--warn)}
+  .panel .close{position:absolute;top:8px;right:10px;background:transparent;border:0;color:var(--dim);
+    font-size:16px;cursor:pointer}
+
+  /* 表格视图 */
+  .tablewrap{position:absolute;inset:0;background:var(--bg);overflow:auto;padding:16px}
+  .tablewrap[hidden]{display:none}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-weight:500;position:sticky;top:0;background:var(--bg)}
+  td.mono{font-family:ui-monospace,Consolas,monospace}
+  .tag{display:inline-block;padding:1px 6px;border:1px solid var(--line3);border-radius:4px;font-size:10px;color:var(--dim)}
+  .empty{padding:40px;color:var(--dim);text-align:center}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="bar">
+    <span class="title">文件关系图</span>
+    <span class="meta" id="meta"></span>
+    <div class="seg" id="layoutSeg">
+      <button data-layout="force" class="on">力导向</button>
+      <button data-layout="tree">树形</button>
+    </div>
+    <div class="seg" id="dirSeg">
+      <button data-dir="out" class="on">它依赖谁</button>
+      <button data-dir="in">谁依赖它</button>
+    </div>
+    <label>深度 <input id="depth" type="range" min="1" max="4" value="2"><span id="depthVal">2</span></label>
+    <label><input id="showExternal" type="checkbox"> 显示外部依赖</label>
+    <div class="spacer"></div>
+    <div class="seg" id="viewSeg">
+      <button data-view="graph" class="on">图</button>
+      <button data-view="table">表格</button>
+    </div>
+    <button id="reset" style="background:transparent;border:1px solid var(--line3);color:var(--dim);border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer">重新布局</button>
+  </div>
+
+  <div class="stage" id="stage">
+    <svg id="svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#3a4356"></path>
+        </marker>
+        <marker id="arrowWarn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#ff5c8a"></path>
+        </marker>
+      </defs>
+      <g id="viewport">
+        <g id="edges"></g>
+        <g id="nodes"></g>
+      </g>
+    </svg>
+
+    <div class="panel" id="panel">
+      <button class="close" id="panelClose">×</button>
+      <h3 id="pTitle"></h3>
+      <div class="path" id="pPath"></div>
+      <div id="pBody"></div>
+    </div>
+
+    <div class="tablewrap" id="tableWrap" hidden></div>
+  </div>
+</div>
+
+<script>
+window.__GRAPH__ = {"project": "sample-ic-project", "root": "D:/Desktop/AI+/aihtml/ic-code-notes/graph-demo/sample-ic-project", "scannedAt": "2026-11-13T15:28:02", "nodes": [{"id": "rtl/defs.svh", "name": "defs.svh", "dir": "rtl", "lang": "verilog", "lines": 6, "out": 0, "in": 2}, {"id": "rtl/sat_alu.sv", "name": "sat_alu.sv", "dir": "rtl", "lang": "verilog", "lines": 14, "out": 2, "in": 1}, {"id": "rtl/tb_top.sv", "name": "tb_top.sv", "dir": "rtl", "lang": "verilog", "lines": 13, "out": 2, "in": 0}, {"id": "tools/parse_report.py", "name": "parse_report.py", "dir": "tools", "lang": "python", "lines": 10, "out": 4, "in": 0}, {"id": "tools/utils.py", "name": "utils.py", "dir": "tools", "lang": "python", "lines": 7, "out": 0, "in": 1}, {"id": "uart_log_tools/check_log.pl", "name": "check_log.pl", "dir": "uart_log_tools", "lang": "perl", "lines": 14, "out": 4, "in": 0}, {"id": "uart_log_tools/uart_rx.pl", "name": "uart_rx.pl", "dir": "uart_log_tools", "lang": "perl", "lines": 14, "out": 2, "in": 1}], "edges": [{"from": "rtl/sat_alu.sv", "to": "missing_localparams.svh", "kind": "include", "line": 2, "raw": "missing_localparams.svh", "status": "missing", "count": 1, "lines": [2]}, {"from": "rtl/sat_alu.sv", "to": "rtl/defs.svh", "kind": "include", "line": 1, "raw": "defs.svh", "status": "resolved", "count": 1, "lines": [1]}, {"from": "rtl/tb_top.sv", "to": "rtl/defs.svh", "kind": "include", "line": 1, "raw": "defs.svh", "status": "resolved", "count": 1, "lines": [1]}, {"from": "rtl/tb_top.sv", "to": "rtl/sat_alu.sv", "kind": "instantiate", "line": 7, "raw": "sat_alu", "status": "resolved", "count": 1, "lines": [7]}, {"from": "tools/parse_report.py", "to": "json", "kind": "import", "line": 2, "raw": "json", "status": "external", "count": 1, "lines": [2]}, {"from": "tools/parse_report.py", "to": "missing_module", "kind": "import", "line": 4, "raw": "missing_module", "status": "missing", "count": 1, "lines": [4]}, {"from": "tools/parse_report.py", "to": "os", "kind": "import", "line": 1, "raw": "os", "status": "external", "count": 1, "lines": [1]}, {"from": "tools/parse_report.py", "to": "tools/utils.py", "kind": "import", "line": 3, "raw": "utils", "status": "resolved", "count": 1, "lines": [3]}, {"from": "uart_log_tools/check_log.pl", "to": "./missing_helper.pl", "kind": "require", "line": 5, "raw": "./missing_helper.pl", "status": "missing", "count": 1, "lines": [5]}, {"from": "uart_log_tools/check_log.pl", "to": "strict", "kind": "require", "line": 2, "raw": "strict", "status": "external", "count": 1, "lines": [2]}, {"from": "uart_log_tools/check_log.pl", "to": "uart_log_tools/uart_rx.pl", "kind": "require", "line": 4, "raw": "./uart_rx.pl", "status": "resolved", "count": 1, "lines": [4]}, {"from": "uart_log_tools/check_log.pl", "to": "warnings", "kind": "require", "line": 3, "raw": "warnings", "status": "external", "count": 1, "lines": [3]}, {"from": "uart_log_tools/uart_rx.pl", "to": "Exporter", "kind": "require", "line": 3, "raw": "Exporter", "status": "external", "count": 1, "lines": [3]}, {"from": "uart_log_tools/uart_rx.pl", "to": "strict", "kind": "require", "line": 2, "raw": "strict", "status": "external", "count": 1, "lines": [2]}], "stats": {"files": 7, "edges": 14, "resolved": 5, "missing": 3, "external": 6, "modules": 2}};
+</script>
+<script>
+(function () {
+  "use strict";
+  var DATA = window.__GRAPH__;
+  if (!DATA) {
+    document.body.innerHTML = '<div class="empty">没有数据。先运行 <code>python extract.py &lt;工程目录&gt; --html</code> 注入数据。</div>';
+    return;
+  }
+
+  var LANG_COLOR = { perl: "#5aa9ff", python: "#f5c451", verilog: "#b48ef0", other: "#7f8a9c",
+                     javascript: "#f0a35e", doc: "#7f8a9c", config: "#7f8a9c" };
+  var state = {
+    layout: "force",
+    dir: "out",
+    depth: 2,
+    showExternal: false,
+    view: "graph",
+    selected: null,
+    root: null,
+    scale: 1,
+    tx: 0,
+    ty: 0
+  };
+
+  var nodes = [], edges = [], byId = {};
+  var externalNode = null;
+  var W = 1200, H = 800;
+
+  var svg = document.getElementById("svg");
+  var viewport = document.getElementById("viewport");
+  var gEdges = document.getElementById("edges");
+  var gNodes = document.getElementById("nodes");
+  var stage = document.getElementById("stage");
+  var panel = document.getElementById("panel");
+  var tableWrap = document.getElementById("tableWrap");
+
+  function svgEl(name, attrs) {
+    var el = document.createElementNS("http://www.w3.org/2000/svg", name);
+    if (attrs) Object.keys(attrs).forEach(function (k) { el.setAttribute(k, attrs[k]); });
+    return el;
+  }
+
+  function build() {
+    nodes = DATA.nodes.map(function (n) {
+      return Object.assign({}, n, { x: 0, y: 0, vx: 0, vy: 0, w: 150, h: 46 });
+    });
+    byId = {};
+    nodes.forEach(function (n) { byId[n.id] = n; });
+
+    externalNode = { id: "__external__", name: "外部依赖", dir: "", lang: "other",
+                     lines: 0, out: 0, in: 0, x: 0, y: 0, vx: 0, vy: 0, w: 150, h: 46, ext: true };
+    if (state.showExternal) nodes.push(externalNode);
+
+    edges = DATA.edges.map(function (e) {
+      var from = byId[e.from];
+      var to = byId[e.to];
+      if (e.status === "external") {
+        if (!state.showExternal) return null;
+        to = externalNode;
+      }
+      if (!from || !to) return null;
+      if (from === to) return null;
+      return Object.assign({}, e, { src: from, dst: to });
+    }).filter(Boolean);
+
+    document.getElementById("meta").textContent =
+      DATA.project + " · " + DATA.stats.files + " 文件 · " + DATA.stats.edges + " 关系（"
+      + DATA.stats.resolved + " 已解析 / " + DATA.stats.missing + " 缺失 / "
+      + DATA.stats.external + " 外部） · 扫描于 " + DATA.scannedAt.replace("T", " ");
+  }
+
+  /* ---------- 力导向 ---------- */
+  function initForce() {
+    var i = 0, n = nodes.length, cols = Math.ceil(Math.sqrt(n));
+    nodes.forEach(function (node) {
+      node.x = (i % cols) * 200 + 120;
+      node.y = Math.floor(i / cols) * 120 + 100;
+      node.vx = node.vy = 0;
+      i++;
+    });
+  }
+
+  var alpha = 1;
+  function tickForce() {
+    var linkDist = 190, repulse = 42000, gravity = 0.015;
+    edges.forEach(function (e) {
+      var dx = e.dst.x - e.src.x, dy = e.dst.y - e.src.y;
+      var d = Math.max(60, Math.hypot(dx, dy));
+      var f = (d - linkDist) * 0.012;
+      var ux = (dx / d) * f, uy = (dy / d) * f;
+      e.src.vx += ux; e.src.vy += uy;
+      e.dst.vx -= ux; e.dst.vy -= uy;
+    });
+    for (var a = 0; a < nodes.length; a++) {
+      for (var b = a + 1; b < nodes.length; b++) {
+        var A = nodes[a], B = nodes[b];
+        var dx = B.x - A.x, dy = B.y - A.y;
+        var d2 = dx * dx + dy * dy || 1;
+        var d = Math.sqrt(d2);
+        var f = repulse / d2;
+        var ux = (dx / d) * f, uy = (dy / d) * f;
+        A.vx -= ux; A.vy -= uy;
+        B.vx += ux; B.vy += uy;
+      }
+    }
+    var cx = W / 2, cy = H / 2;
+    nodes.forEach(function (n) {
+      if (n.fixed) { n.vx = n.vy = 0; return; }
+      n.vx += (cx - n.x) * gravity;
+      n.vy += (cy - n.y) * gravity;
+      n.vx *= 0.82; n.vy *= 0.82;
+      n.x += n.vx * alpha; n.y += n.vy * alpha;
+    });
+    alpha *= 0.985;
+  }
+
+  /* ---------- 树形 ---------- */
+  function layoutTree() {
+    var rootId = state.root || (nodes[0] && nodes[0].id);
+    var seen = {}, layers = [], queue = [[rootId, 0]];
+    var adjacency = {};
+    edges.forEach(function (e) {
+      var key = state.dir === "out" ? e.src.id : e.dst.id;
+      var val = state.dir === "out" ? e.dst.id : e.src.id;
+      (adjacency[key] = adjacency[key] || []).push(val);
+    });
+    seen[rootId] = true;
+    while (queue.length) {
+      var cur = queue.shift();
+      (layers[cur[1]] = layers[cur[1]] || []).push(cur[0]);
+      if (cur[1] >= state.depth) continue;
+      (adjacency[cur[0]] || []).forEach(function (next) {
+        if (seen[next]) return;
+        seen[next] = true;
+        queue.push([next, cur[1] + 1]);
+      });
+    }
+    var visible = {};
+    layers.forEach(function (col, depth) {
+      col.forEach(function (id, row) {
+        var n = byId[id];
+        if (!n) return;
+        visible[id] = true;
+        n.x = 140 + depth * 240;
+        n.y = 90 + row * 76;
+        n.fixed = true;
+      });
+    });
+    nodes.forEach(function (n) { if (!visible[n.id]) n.hidden = true; });
+  }
+
+  /* ---------- 渲染 ---------- */
+  function render() {
+    gEdges.innerHTML = "";
+    gNodes.innerHTML = "";
+
+    edges.forEach(function (e) {
+      if (e.src.hidden || e.dst.hidden) return;
+      var cls = "edge" + (e.status === "missing" ? " missing" : e.status === "external" ? " external" : "");
+      var x1 = e.src.x + e.src.w / 2, y1 = e.src.y;
+      var x2 = e.dst.x - e.dst.w / 2 - 6, y2 = e.dst.y;
+      var mx = (x1 + x2) / 2;
+      var path = svgEl("path", {
+        d: "M" + x1 + "," + y1 + " C" + mx + "," + y1 + " " + mx + "," + y2 + " " + x2 + "," + y2,
+        "class": cls,
+        "marker-end": "url(#" + (e.status === "missing" ? "arrowWarn" : "arrow") + ")",
+        "data-from": e.from, "data-to": e.to
+      });
+      gEdges.appendChild(path);
+      e.el = path;
+    });
+
+    nodes.forEach(function (n) {
+      if (n.hidden) return;
+      var g = svgEl("g", { "class": "node", transform: "translate(" + (n.x - n.w / 2) + "," + (n.y - n.h / 2) + ")" });
+      g.appendChild(svgEl("rect", { width: n.w, height: n.h, rx: 8 }));
+      g.appendChild(svgEl("circle", {
+        "class": "dot", cx: 14, cy: 16, r: 3.5, fill: LANG_COLOR[n.lang] || "#7f8a9c"
+      }));
+      var name = svgEl("text", { "class": "name", x: 24, y: 20 });
+      name.textContent = n.name.length > 19 ? n.name.slice(0, 18) + "…" : n.name;
+      g.appendChild(name);
+      var sub = svgEl("text", { "class": "sub", x: 14, y: 36 });
+      sub.textContent = n.ext ? "折叠的 N 个外部引用" : (n.lines + " 行 · ↑" + n.out + " ↓" + n.in);
+      g.appendChild(sub);
+      g.addEventListener("click", function (ev) { ev.stopPropagation(); select(n); });
+      g.addEventListener("mouseenter", function () { highlight(n); });
+      g.addEventListener("mouseleave", function () { highlight(null); });
+      g.addEventListener("dblclick", function () { flash("打开文件：" + (n.ext ? "（聚合节点）" : n.id)); });
+      g.addEventListener("mousedown", function (ev) { startDrag(ev, n); });
+      n.el = g;
+      gNodes.appendChild(g);
+    });
+    applyTransform();
+  }
+
+  function select(n) {
+    state.selected = n;
+    state.root = n.id;
+    if (!n.ext) {
+      document.getElementById("pTitle").textContent = n.name;
+      document.getElementById("pPath").textContent = n.id;
+      var out = edges.filter(function (e) { return e.src === n; });
+      var into = edges.filter(function (e) { return e.dst === n; });
+      var html = "";
+      html += '<div class="sect">它依赖 ' + out.length + '</div>' + list(out, "dst", "src");
+      html += '<div class="sect">谁依赖它 ' + into.length + '</div>' + list(into, "src", "dst");
+      document.getElementById("pBody").innerHTML = html;
+    } else {
+      document.getElementById("pTitle").textContent = "外部依赖（聚合）";
+      document.getElementById("pPath").textContent = "标准库 / 系统模块引用";
+      document.getElementById("pBody").innerHTML = "";
+    }
+    panel.classList.add("open");
+    highlight(n);
+  }
+
+  function list(items, side, other) {
+    if (!items.length) return '<div class="path">—</div>';
+    return "<ul>" + items.map(function (e) {
+      var target = e[side];
+      var label = target.ext ? e.raw : (target.id || target);
+      var miss = e.status === "missing" ? ' <span class="miss">缺失</span>' : "";
+      return "<li><span class=\"k\">" + e.kind + "</span>" + label + miss
+        + ' <span class="k">第 ' + e.lines.join(",") + " 行</span>"
+        + (e.count > 1 ? ' <span class="k">×' + e.count + "</span>" : "") + "</li>";
+    }).join("") + "</ul>";
+  }
+
+  function highlight(n) {
+    var hot = {};
+    if (n) {
+      hot[n.id] = true;
+      edges.forEach(function (e) {
+        if (e.src === n) hot[e.dst.id] = true;
+        if (e.dst === n) hot[e.src.id] = true;
+      });
+    }
+    nodes.forEach(function (node) {
+      if (!node.el) return;
+      node.el.classList.toggle("dim", !!n && !hot[node.id]);
+      node.el.classList.toggle("hot", !!n && node === n);
+    });
+    edges.forEach(function (e) {
+      if (!e.el) return;
+      var related = !n || e.src === n || e.dst === n;
+      e.el.classList.toggle("dim", !related);
+      e.el.classList.toggle("hot", !!n && related);
+    });
+  }
+
+  function applyTransform() {
+    viewport.setAttribute("transform", "translate(" + state.tx + "," + state.ty + ") scale(" + state.scale + ")");
+  }
+
+  /* ---------- 交互 ---------- */
+  function startDrag(ev, n) {
+    ev.preventDefault();
+    var startX = ev.clientX, startY = ev.clientY;
+    var ox = n.x, oy = n.y;
+    function move(e) {
+      n.x = ox + (e.clientX - startX) / state.scale;
+      n.y = oy + (e.clientY - startY) / state.scale;
+      n.fixed = true;
+      render();
+    }
+    function up() {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    }
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  }
+
+  var panning = null;
+  svg.addEventListener("mousedown", function (ev) {
+    if (ev.target.closest && ev.target.closest(".node")) return;
+    panning = { x: ev.clientX, y: ev.clientY, tx: state.tx, ty: state.ty };
+    svg.classList.add("dragging");
+  });
+  window.addEventListener("mousemove", function (ev) {
+    if (!panning) return;
+    state.tx = panning.tx + (ev.clientX - panning.x);
+    state.ty = panning.ty + (ev.clientY - panning.y);
+    applyTransform();
+  });
+  window.addEventListener("mouseup", function () { panning = null; svg.classList.remove("dragging"); });
+  svg.addEventListener("wheel", function (ev) {
+    ev.preventDefault();
+    var next = state.scale * (ev.deltaY < 0 ? 1.1 : 0.9);
+    state.scale = Math.min(3, Math.max(0.25, next));
+    applyTransform();
+  }, { passive: false });
+  svg.addEventListener("click", function () { panel.classList.remove("open"); highlight(null); });
+
+  /* ---------- 视图切换 ---------- */
+  function renderTable() {
+    var rows = DATA.nodes.map(function (n) {
+      var out = DATA.edges.filter(function (e) { return e.from === n.id; });
+      var into = DATA.edges.filter(function (e) { return e.to === n.id && e.status === "resolved"; });
+      var deps = out.filter(function (e) { return e.status !== "external"; })
+        .map(function (e) { return (e.status === "missing" ? "⚠ " : "") + e.to; });
+      return "<tr><td class=\"mono\">" + n.id + "</td><td>" + (LANG_COLOR[n.lang] ? n.lang : n.lang)
+        + "</td><td>" + out.length + "</td><td>" + into.length + "</td><td class=\"mono\">"
+        + (deps.join("<br>") || "—") + "</td></tr>";
+    }).join("");
+    tableWrap.innerHTML = '<table><thead><tr><th>文件</th><th>语言</th><th>引用数</th>'
+      + '<th>被引用数</th><th>依赖的文件</th></tr></thead><tbody>' + rows + "</tbody></table>";
+  }
+
+  function setView(view) {
+    state.view = view;
+    tableWrap.hidden = view !== "table";
+    document.getElementById("svg").style.visibility = view === "table" ? "hidden" : "visible";
+    document.querySelectorAll("#viewSeg button").forEach(function (b) {
+      b.classList.toggle("on", b.dataset.view === view);
+    });
+    if (view === "table") renderTable();
+  }
+
+  var toast = null;
+  function flash(text) {
+    if (toast) toast.remove();
+    toast = document.createElement("div");
+    toast.textContent = text;
+    toast.style.cssText = "position:absolute;left:50%;bottom:28px;transform:translateX(-50%);"
+      + "background:#1a1f2b;border:1px solid #3a4356;border-radius:8px;padding:8px 12px;font-size:12px;color:#e6e9ef";
+    stage.appendChild(toast);
+    setTimeout(function () { if (toast) { toast.remove(); toast = null; } }, 2200);
+  }
+
+  function relayout() {
+    nodes.forEach(function (n) { n.hidden = false; n.fixed = false; });
+    if (state.layout === "tree") {
+      layoutTree();
+    } else {
+      alpha = 1;
+      initForce();
+    }
+    render();
+  }
+
+  document.getElementById("layoutSeg").addEventListener("click", function (ev) {
+    var btn = ev.target.closest("button"); if (!btn) return;
+    state.layout = btn.dataset.layout;
+    document.querySelectorAll("#layoutSeg button").forEach(function (b) {
+      b.classList.toggle("on", b === btn);
+    });
+    relayout();
+  });
+  document.getElementById("dirSeg").addEventListener("click", function (ev) {
+    var btn = ev.target.closest("button"); if (!btn) return;
+    state.dir = btn.dataset.dir;
+    document.querySelectorAll("#dirSeg button").forEach(function (b) {
+      b.classList.toggle("on", b === btn);
+    });
+    if (state.layout === "tree") relayout();
+  });
+  document.getElementById("viewSeg").addEventListener("click", function (ev) {
+    var btn = ev.target.closest("button"); if (!btn) return;
+    setView(btn.dataset.view);
+  });
+  document.getElementById("depth").addEventListener("input", function (ev) {
+    state.depth = Number(ev.target.value);
+    document.getElementById("depthVal").textContent = state.depth;
+    if (state.layout === "tree") relayout();
+  });
+  document.getElementById("showExternal").addEventListener("change", function (ev) {
+    state.showExternal = ev.target.checked;
+    build();
+    relayout();
+  });
+  document.getElementById("reset").addEventListener("click", function () {
+    state.scale = 1; state.tx = 0; state.ty = 0; applyTransform();
+    relayout();
+  });
+  document.getElementById("panelClose").addEventListener("click", function () {
+    panel.classList.remove("open");
+  });
+  window.addEventListener("resize", function () {
+    W = stage.clientWidth; H = stage.clientHeight;
+  });
+
+  /* ---------- 启动 ---------- */
+  W = stage.clientWidth || 1200;
+  H = stage.clientHeight || 900;
+  build();
+  initForce();
+  render();
+  loop();
+
+  // 独立窗口模式：关系图可以单独开一个窗口，通过 URL 参数指定要聚焦的文件
+  (function initWindowBridge() {
+    var params = new URLSearchParams(location.search);
+    var focus = params.get("file");
+    if (focus && byId[focus]) {
+      state.root = focus;
+      select(byId[focus]);
+    }
+    // 监听代码窗口发来的「聚焦某个文件」
+    window.addEventListener("message", function (ev) {
+      var data = ev.data;
+      if (!data || data.type !== "icn:focus" || !data.file) return;
+      var node = byId[data.file];
+      if (node) { state.root = node.id; select(node); }
+    });
+  })();
+
+  // 双击节点时如果是从代码窗口打开的，回传消息
+  gNodes.addEventListener("dblclick", function (ev) {
+    var g = ev.target.closest ? ev.target.closest(".node") : null;
+    if (!g || !window.opener) return;
+    var id = null;
+    nodes.forEach(function (n) { if (n.el === g) id = n.id; });
+    if (id) {
+      try { window.opener.postMessage({ type: "icn:open-file", file: id }, "*"); } catch (e) {}
+    }
+  }, true);
+
+  function loop() {
+    if (state.layout === "force" && alpha > 0.02) {
+      tickForce();
+      render();
+    }
+    requestAnimationFrame(loop);
+  }
+})();
+</script>
+</body>
+</html>
